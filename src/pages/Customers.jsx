@@ -146,8 +146,9 @@ function CustomerAddModal({ onClose, onCreated }) {
                 data-testid="cust-country-code"
                 value={form.country_code}
                 onChange={(e) => setForm({ ...form, country_code: e.target.value })}
-                className="aura-input w-28 sm:w-32 flex-shrink-0"
-              >
+                <select
+  className="aura-input !w-[72px] flex-shrink-0 px-2"
+>
                 {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
               </select>
               <input
@@ -158,10 +159,9 @@ function CustomerAddModal({ onClose, onCreated }) {
                 pattern="[0-9\s\-]{6,15}"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^\d\s-]/g, "") })}
-                className="aura-input"
-style={{ flex: 1, minWidth: "180px" }}
-                placeholder="98765 43210"
-              />
+                c className="aura-input flex-1 w-full"
+  placeholder="98765 43210"
+/>
             </div>
           </div>
 
