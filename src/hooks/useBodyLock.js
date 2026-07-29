@@ -2,27 +2,23 @@ import { useEffect } from "react";
 
 export function useBodyLock(open) {
   useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
     if (open) {
-      document.body.style.overflow = "hidden";
-      document.documentElement.style.overflow = "hidden";
-      document.documentElement.classList.add("body-locked");
+      html.classList.add("body-locked");
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      document.documentElement.classList.remove("body-locked");
+      html.classList.remove("body-locked");
+      html.style.overflow = "";
+      body.style.overflow = "";
     }
 
     return () => {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      document.documentElement.classList.remove("body-locked");
+      html.classList.remove("body-locked");
+      html.style.overflow = "";
+      body.style.overflow = "";
     };
   }, [open]);
 }
-useEffect(() => {
-  console.log("OPEN =", open);
-  console.log(
-    "HTML LOCK =",
-    document.documentElement.classList.contains("body-locked")
-  );
-}, [open]);
