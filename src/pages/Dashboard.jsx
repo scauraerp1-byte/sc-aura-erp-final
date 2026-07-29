@@ -13,10 +13,10 @@ function StatTile({ label, value, icon: Icon, accent, testid, onClick }) {
       className={`text-left glass rounded-2xl p-4 sm:p-5 transition-all hover:bg-white/[0.07] active:scale-[0.99] ${accent ? "border-[#d4af37]/30" : ""}`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-white/45">{label}</span>
+        <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-[var(--sca-text-muted)]">{label}</span>
         {Icon && <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${accent ? "text-[#ebd281]" : "text-white/40"}`} />}
       </div>
-      <div className="font-display text-2xl sm:text-3xl mt-2 tracking-tight text-white">{value}</div>
+      <div className="font-display text-2xl sm:text-3xl mt-2 tracking-tight text-[var(--sca-text)]">{value}</div>
     </button>
   );
 }
@@ -33,7 +33,7 @@ function QuickAction({ label, icon: Icon, to, testid, accent }) {
           : "glass border-white/10"
       }`}
     >
-      <Icon className={`w-4 h-4 ${accent ? "text-white" : "text-white/70"}`} />
+      <Icon className={`w-4 h-4 ${accent ? "text-white" : "text-[var(--sca-text-soft)]"}`} />
       <span className="text-xs uppercase tracking-[0.18em] font-medium">{label}</span>
     </button>
   );
@@ -73,9 +73,9 @@ export default function Dashboard() {
       {/* Greeting */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.3em] text-[#ebd281]">{getOverline(role)}</div>
+          <div className="text-[10px] uppercase tracking-[0.3em] brand-text">{getOverline(role)}</div>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight">{getGreeting()}, {user.name.split(" ")[0]}.</h1>
-          <p className="text-sm text-white/55 mt-1">Wholesale operations at a glance.</p>
+          <p className="text-sm text-[var(--sca-text-muted)] mt-1">Wholesale operations at a glance.</p>
         </div>
       </div>
 
