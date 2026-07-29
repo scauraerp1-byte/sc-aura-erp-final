@@ -133,7 +133,7 @@ function CustomerAddModal({ onClose, onCreated }) {
           </button>
         </div>
 
-        <div className="modal-body px-6 py-5 space-y-3">
+        <div className="modal-body px-6 py-5 space-y-3 overflow-x-hidden">
           <label className="block">
             <span className="text-xs text-[var(--sca-text-soft)] dark:text-white/70 mb-1.5 inline-block">Full name *</span>
             <input data-testid="cust-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="aura-input" placeholder="Meena Fashion Hub" />
