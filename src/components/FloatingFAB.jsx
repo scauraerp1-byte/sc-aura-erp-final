@@ -36,7 +36,10 @@ export default function FloatingFAB() {
           type="button"
           aria-label="Close menu"
           data-testid="fab-backdrop"
-          onClick={() => setOpen(false)}
+          onClick={(e) => {
+  e.stopPropagation();
+  setOpen(false);
+}}
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] fade-up"
         />
       )}
@@ -80,17 +83,3 @@ export default function FloatingFAB() {
     </>
   );
 }
-// useBodyLock(open);
-import { useEffect } from "react";
-
-useEffect(() => {
-  document.documentElement.classList.toggle("body-locked", open);
-  document.documentElement.style.overflow = open ? "hidden" : "";
-  document.body.style.overflow = open ? "hidden" : "";
-
-  return () => {
-    document.documentElement.classList.remove("body-locked");
-    document.documentElement.style.overflow = "";
-    document.body.style.overflow = "";
-  };
-}, [open]);
