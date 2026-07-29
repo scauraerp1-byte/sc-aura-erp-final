@@ -32,16 +32,12 @@ export default function FloatingFAB() {
   return (
     <>
       {open && (
-        <button
-          type="button"
-          aria-label="Close menu"
-          data-testid="fab-backdrop"
-          onClick={(e) => {
-  e.stopPropagation();
-  setOpen(false);
-}}
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] fade-up"
-        />
+        <div
+  aria-hidden="true"
+  data-testid="fab-backdrop"
+  onClick={() => setOpen(false)}
+  className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] fade-up"
+/>
       )}
 
       <div className="fab-anchor fixed z-50 right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-8 flex flex-col items-end gap-2.5 pointer-events-none">
