@@ -1,0 +1,385 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   SC AURA KURTIS – Professional Wholesale ERP
+   Design tokens (from client brief)
+   Primary  : #111827   (Dark Slate)
+   Secondary: #374151
+   Success  : #16A34A
+   Warning  : #F59E0B
+   Error    : #DC2626
+   BG       : #FFFFFF
+   Card     : #F8FAFC
+   Border   : #E5E7EB
+   Text     : #111827  /  Muted: #6B7280
+   Brand hue (used only in logo halo, kept minimal): #b98a1e
+   ========================================================================== */
+
+:root {
+  /* Semantic tokens - shared across themes */
+  --sca-primary: #111827;
+  --sca-secondary: #374151;
+  --sca-success: #16a34a;
+  --sca-warning: #f59e0b;
+  --sca-error: #dc2626;
+  --sca-brand: #b98a1e;
+  --sca-brand-soft: #f3d97a;
+}
+
+/* Dark theme (default) --------------------------------------------------- */
+html.theme-dark {
+  --sca-bg: #0b0e14;
+  --sca-surface: #11151d;
+  --sca-surface-2: #161b25;
+  --sca-border: rgba(255,255,255,0.08);
+  --sca-border-strong: rgba(255,255,255,0.14);
+  --sca-text: #f3f4f6;
+  --sca-text-soft: rgba(243,244,246,0.72);
+  --sca-text-muted: rgba(243,244,246,0.50);
+  --sca-input-bg: rgba(255,255,255,0.04);
+  --sca-input-border: rgba(255,255,255,0.10);
+  --sca-glass: rgba(255,255,255,0.03);
+  --sca-glass-strong: rgba(255,255,255,0.06);
+  --sca-overlay: rgba(0,0,0,0.62);
+  --sca-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+/* Light theme ------------------------------------------------------------ */
+html.theme-light {
+  --sca-bg: #ffffff;
+  --sca-surface: #f8fafc;
+  --sca-surface-2: #f1f5f9;
+  --sca-border: #e5e7eb;
+  --sca-border-strong: #d1d5db;
+  --sca-text: #111827;
+  --sca-text-soft: #374151;
+  --sca-text-muted: #6b7280;
+  --sca-input-bg: #ffffff;
+  --sca-input-border: #d1d5db;
+  --sca-glass: #ffffff;
+  --sca-glass-strong: #ffffff;
+  --sca-overlay: rgba(17,24,39,0.55);
+  --sca-shadow: 0 6px 18px rgba(17,24,39,0.06);
+}
+
+/* Shadcn compatibility – map to our tokens */
+@layer base {
+  html.theme-dark {
+    --background: 220 20% 6%;
+    --foreground: 210 20% 96%;
+    --card: 220 18% 10%;
+    --card-foreground: 210 20% 96%;
+    --popover: 220 18% 12%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 220 20% 96%;
+    --primary-foreground: 220 20% 10%;
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 220 12% 16%;
+    --muted-foreground: 220 8% 65%;
+    --accent: 220 12% 20%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 220 20% 65%;
+    --radius: 0.75rem;
+  }
+  html.theme-light {
+    --background: 0 0% 100%;
+    --foreground: 220 22% 15%;
+    --card: 210 20% 98%;
+    --card-foreground: 220 22% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 22% 15%;
+    --primary: 220 22% 15%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 22% 15%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%;
+    --accent: 220 14% 94%;
+    --accent-foreground: 220 22% 15%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 220 22% 40%;
+    --radius: 0.75rem;
+  }
+}
+
+html, body, #root {
+  background: var(--sca-bg);
+  color: var(--sca-text);
+  min-height: 100vh;
+  font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+/* Prevent iOS bounce jank & lock body when a modal opens */
+html.body-locked, html.body-locked body { overflow: hidden !important; touch-action: none; }
+
+/* Typography helpers ---------------------------------------------------- */
+.font-display { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: -0.015em; }
+.font-body    { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; }
+.font-mono-receipt { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+/* Card surface (replaces .glass / .glass-strong for a clean look) ------- */
+.glass {
+  background: var(--sca-glass);
+  border: 1px solid var(--sca-border);
+  color: var(--sca-text);
+}
+html.theme-light .glass {
+  background: var(--sca-surface);
+  box-shadow: var(--sca-shadow);
+}
+.glass-strong {
+  background: var(--sca-glass-strong);
+  border: 1px solid var(--sca-border-strong);
+  color: var(--sca-text);
+}
+html.theme-light .glass-strong {
+  background: #ffffff;
+  box-shadow: 0 12px 40px rgba(17,24,39,0.10);
+}
+
+/* Brand text – used ONLY on wordmark/logo overline, never on amounts ---- */
+.brand-text { color: var(--sca-brand); }
+html.theme-light .brand-text { color: #8a6512; }
+
+/* Legacy .gold-text -> now becomes primary text (kills gold amounts) ---- */
+.gold-text { color: var(--sca-text); font-weight: 700; -webkit-text-fill-color: currentColor; background: none; }
+
+/* Amount emphasised – bold neutral, never gold ------------------------- */
+.amount { font-weight: 700; letter-spacing: -0.01em; color: var(--sca-text); }
+
+/* Buttons ---------------------------------------------------------------- */
+.btn-primary {
+  background: var(--sca-primary);
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  box-shadow: 0 6px 18px rgba(17,24,39,0.15);
+}
+.btn-primary:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); filter: brightness(0.96); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; filter: none; }
+html.theme-light .btn-primary { color: #ffffff; background: #111827; }
+
+/* Backward-compat: keep .btn-gold callable but map to primary */
+.btn-gold { @apply btn-primary; }
+
+/* Inputs ----------------------------------------------------------------- */
+.aura-input {
+  background: var(--sca-input-bg);
+  border: 1px solid var(--sca-input-border);
+  color: var(--sca-text);
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.aura-input:focus {
+  outline: none;
+  border-color: var(--sca-primary);
+  box-shadow: 0 0 0 3px rgba(17,24,39,0.10);
+}
+html.theme-dark .aura-input:focus { box-shadow: 0 0 0 3px rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.35); }
+.aura-input::placeholder { color: var(--sca-text-muted); }
+
+/* Scrollbar helpers ----------------------------------------------------- */
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { scrollbar-width: none; }
+
+/* Motion helpers ------------------------------------------------------- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fadeUp 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.shimmer {
+  background: linear-gradient(90deg, var(--sca-surface) 0px, var(--sca-surface-2) 200px, var(--sca-surface) 400px);
+  background-size: 800px 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+/* Legacy tokens still referenced in JSX --------------------------------- */
+.gold-border { border-color: var(--sca-border); }
+
+/* Selection – neutral ---------------------------------------------------- */
+::selection { background: rgba(17,24,39,0.14); color: var(--sca-text); }
+html.theme-dark ::selection { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* -----------------------------------------------------------------------
+   Global overrides for legacy Tailwind color classes
+   -----------------------------------------------------------------------
+   The codebase has many `text-white/*`, `bg-white/5`, `bg-black/*` etc.
+   The following rules make those legacy classes render correctly in the
+   light theme without needing to touch every file.
+   ----------------------------------------------------------------------- */
+html.theme-light .text-white,
+html.theme-light [class*="text-white\\/"] { color: var(--sca-text) !important; }
+html.theme-light .text-white\/90 { color: var(--sca-text) !important; }
+html.theme-light .text-white\/80 { color: var(--sca-text-soft) !important; }
+html.theme-light .text-white\/70 { color: var(--sca-text-soft) !important; }
+html.theme-light .text-white\/65 { color: var(--sca-text-muted) !important; }
+html.theme-light .text-white\/60 { color: var(--sca-text-muted) !important; }
+html.theme-light .text-white\/55 { color: var(--sca-text-muted) !important; }
+html.theme-light .text-white\/50 { color: var(--sca-text-muted) !important; }
+html.theme-light .text-white\/45,
+html.theme-light .text-white\/40 { color: var(--sca-text-muted) !important; }
+html.theme-light .text-white\/35,
+html.theme-light .text-white\/30 { color: #9ca3af !important; }
+
+html.theme-light .border-white\/5,
+html.theme-light .border-white\/10,
+html.theme-light .border-white\/15,
+html.theme-light .border-white\/20 { border-color: var(--sca-border) !important; }
+
+html.theme-light .bg-white\/5,
+html.theme-light .bg-white\/\[0\.03\],
+html.theme-light .bg-white\/\[0\.04\],
+html.theme-light .bg-white\/\[0\.07\],
+html.theme-light .bg-white\/10 { background-color: var(--sca-surface) !important; }
+html.theme-light .hover\:bg-white\/10:hover,
+html.theme-light .hover\:bg-white\/15:hover,
+html.theme-light .hover\:bg-white\/20:hover { background-color: var(--sca-surface-2) !important; }
+
+html.theme-light .bg-black\/40,
+html.theme-light .bg-black\/60,
+html.theme-light .bg-black\/65,
+html.theme-light .bg-black\/70,
+html.theme-light .bg-black\/75,
+html.theme-light .bg-black\/80 { background-color: rgba(17,24,39,0.55) !important; color: #ffffff; }
+html.theme-light .bg-black { background: var(--sca-surface) !important; color: var(--sca-text) !important; }
+
+html.theme-light .divide-white\/5 > * + * { border-color: var(--sca-border) !important; }
+html.theme-light aside { background: #ffffff !important; border-color: var(--sca-border) !important; }
+html.theme-light header { background: rgba(255,255,255,0.94) !important; border-bottom-color: var(--sca-border) !important; }
+html.theme-light nav.lg\:hidden.fixed { background: rgba(255,255,255,0.96) !important; border-color: var(--sca-border) !important; }
+
+/* Kill remaining gold text and gold accent references in the light theme */
+html.theme-light .text-\[\#ebd281\],
+html.theme-light .text-\[\#ebd281\]\/80,
+html.theme-light .text-\[\#ebd281\]\/90 { color: var(--sca-text) !important; }
+html.theme-light .bg-\[\#d4af37\]\/10,
+html.theme-light .bg-\[\#d4af37\]\/8,
+html.theme-light .bg-\[\#d4af37\]\/15 { background-color: rgba(17,24,39,0.05) !important; }
+html.theme-light .border-\[\#d4af37\]\/30,
+html.theme-light .border-\[\#d4af37\]\/40 { border-color: var(--sca-border-strong) !important; }
+html.theme-light .from-\[\#ebd281\] { --tw-gradient-from: #111827 !important; }
+html.theme-light .to-\[\#997a15\], html.theme-light .to-\[\#d4af37\] { --tw-gradient-to: #374151 !important; }
+
+/* Dark theme: also tone the gold accents down slightly */
+html.theme-dark .text-\[\#ebd281\] { color: #e4b551; }
+
+/* Amber pending pill on light theme – ensure readability */
+html.theme-light .text-amber-200,
+html.theme-light .text-amber-300 { color: #b45309 !important; }
+html.theme-light .bg-amber-500\/15 { background-color: rgba(245,158,11,0.15) !important; }
+html.theme-light .border-amber-500\/30 { border-color: rgba(245,158,11,0.45) !important; }
+html.theme-light .text-emerald-300 { color: #059669 !important; }
+html.theme-light .bg-emerald-500\/15 { background-color: rgba(22,163,74,0.14) !important; }
+html.theme-light .border-emerald-500\/30 { border-color: rgba(22,163,74,0.45) !important; }
+html.theme-light .text-red-200,
+html.theme-light .text-red-300 { color: #b91c1c !important; }
+html.theme-light .bg-red-500\/10,
+html.theme-light .bg-red-500\/15 { background-color: rgba(220,38,38,0.10) !important; }
+html.theme-light .border-red-500\/30 { border-color: rgba(220,38,38,0.35) !important; }
+
+/* Focus visible for a11y */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--sca-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+html.theme-dark button:focus-visible, html.theme-dark a:focus-visible { outline-color: rgba(255,255,255,0.65); }
+
+/* Print styles – for QR label / receipt fallback */
+@media print {
+  html, body { background: #fff !important; color: #000 !important; }
+}
+
+/* iOS safe-area padding for bottom nav */
+.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top:    max(0.5rem, env(safe-area-inset-top)); }
+.px-safe { padding-left:   max(0.75rem, env(safe-area-inset-left));
+           padding-right:  max(0.75rem, env(safe-area-inset-right)); }
+
+/* =====================================================================
+   Global modal system
+   ---------------------------------------------------------------------
+   All modals in the app use the same outer/inner pattern:
+     <div class="fixed inset-0 z-[80] bg-black/... grid place-items-center p-4">
+       <div class="... rounded-2xl border ...">...</div>
+     </div>
+   The rules below enforce:
+     – viewport-height cap (dynamic vh handles iOS URL bar)
+     – internal scroll on inner shell
+     – safe-area bottom padding
+     – FAB hidden whenever any modal is open (body-locked ref-counted)
+     – bottom-nav respected (extra bottom padding on mobile)
+   ===================================================================== */
+
+/* Shared modal shell class – opt-in for consumers */
+.modal-shell {
+  max-height: min(85dvh, calc(100dvh - 80px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  margin: auto;                     /* fallback centering when parent is auto-height */
+}
+.modal-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* Modal outer viewport – anchors to the visual viewport (fixed inset-0 in
+ * the consumer) and centres the shell with a flex column. We deliberately
+ * avoid env(safe-area-inset-*) padding because some emulated Chrome mobile
+ * viewports resolve those values erratically, pushing the shell far below
+ * centre. Safe-area is instead applied INSIDE .modal-shell via padding-
+ * bottom above. */
+.modal-viewport {
+  padding: 16px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Auto-cap any [role="dialog"] inner card even if consumer forgot .modal-shell */
+[role="dialog"] > form,
+[role="dialog"] > div:not(.modal-viewport) {
+  max-height: min(85dvh, calc(100dvh - 80px));
+}
+[role="dialog"] > form { display: flex; flex-direction: column; }
+
+/* FAB and bottom-nav – auto-hidden whenever any modal is open */
+html.body-locked .fab-anchor,
+html.body-locked nav.sca-bottom-nav { display: none !important; }
+
+/* Bottom-nav safe area */
+nav.sca-bottom-nav { padding-bottom: max(0.6rem, env(safe-area-inset-bottom)); }
+
+/* Prevent iOS momentum from letting the page rubberband while a modal is open */
+html.body-locked { touch-action: none; }
+
+/* Keyboard-safe: iOS shrinks visualViewport when keyboard opens – rely on dvh */
+@supports (height: 90dvh) {
+  .modal-shell { max-height: min(90dvh, calc(100vh - 32px)); }
+}
+
+/* Larger, easier-to-tap picker rows on mobile */
+@media (max-width: 640px) {
+  [role="dialog"] button[type="button"] { min-height: 44px; }
+}
