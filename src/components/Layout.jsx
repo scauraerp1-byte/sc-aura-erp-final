@@ -69,6 +69,9 @@ export default function Layout({ children }) {
           </div>
         </div>
         <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto scroll-hide">
+          console.log("SIDE", SIDE);
+console.log("ROLE", user.role);
+console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
           {SIDE.filter((i) => allowed(i.roles)).map((item) => {
             const Icon = item.icon;
             const active = loc.pathname === item.to || (item.to !== "/" && loc.pathname.startsWith(item.to));
