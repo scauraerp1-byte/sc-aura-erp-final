@@ -158,7 +158,8 @@ function CustomerAddModal({ onClose, onCreated }) {
                 pattern="[0-9\s\-]{6,15}"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^\d\s-]/g, "") })}
-                className="aura-input flex-1 min-w-0"
+                className="aura-input"
+style={{ flex: 1, minWidth: "180px" }}
                 placeholder="98765 43210"
               />
             </div>
