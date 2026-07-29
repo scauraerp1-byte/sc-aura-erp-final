@@ -120,8 +120,6 @@ export default function Layout({ children }) {
     text-[var(--sca-text)]"
   onClick={(e) => e.stopPropagation()}
 >
-            onClick={(e) => e.stopPropagation()}
-          >
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2 min-w-0">
                 <LogoBadge size={32} />
