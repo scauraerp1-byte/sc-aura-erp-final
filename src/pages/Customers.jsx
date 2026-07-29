@@ -142,12 +142,12 @@ function CustomerAddModal({ onClose, onCreated }) {
           <div>
             <span className="text-xs text-[var(--sca-text-soft)] dark:text-white/70 mb-1.5 inline-block">Mobile number *</span>
             <div className="flex gap-2">
-              <select
-                data-testid="cust-country-code"
-                value={form.country_code}
-                onChange={(e) => setForm({ ...form, country_code: e.target.value })}
-                <select
+          <select
+  data-testid="cust-country-code"
+  value={form.country_code}
+  onChange={(e) => setForm({ ...form, country_code: e.target.value })}
   className="aura-input !w-[72px] flex-shrink-0 px-2"
+>
 >
                 {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
               </select>
