@@ -67,7 +67,10 @@ export default function FloatingFAB() {
         <button
           type="button"
           data-testid="fab-toggle"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+  console.log("FAB", open);
+  setOpen(v => !v);
+}}
           aria-label={open ? "Close quick actions" : "Open quick actions"}
           className="pointer-events-auto w-14 h-14 rounded-full bg-[var(--sca-primary)] text-white grid place-items-center shadow-[0_12px_28px_rgba(17,24,39,0.35)] hover:brightness-110 active:scale-95 transition"
         >
