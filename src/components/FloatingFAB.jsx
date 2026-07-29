@@ -71,7 +71,7 @@ export default function FloatingFAB() {
           aria-label={open ? "Close quick actions" : "Open quick actions"}
           className="pointer-events-auto w-14 h-14 rounded-full bg-[var(--sca-primary)] text-white grid place-items-center shadow-[0_12px_28px_rgba(17,24,39,0.35)] hover:brightness-110 active:scale-95 transition"
         >
-          {open ? <X className="w-6 h-6" /> : <Plus className="w-7 h-7" />}
+          {open ? <X className="w-6 h-6" /> : <Plus className="w-7 h-7 text-white stroke-[3]" />}
         </button>
       </div>
     </>
