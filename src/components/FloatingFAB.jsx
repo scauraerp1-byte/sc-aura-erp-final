@@ -80,3 +80,17 @@ export default function FloatingFAB() {
     </>
   );
 }
+// useBodyLock(open);
+import { useEffect } from "react";
+
+useEffect(() => {
+  document.documentElement.classList.toggle("body-locked", open);
+  document.documentElement.style.overflow = open ? "hidden" : "";
+  document.body.style.overflow = open ? "hidden" : "";
+
+  return () => {
+    document.documentElement.classList.remove("body-locked");
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+  };
+}, [open]);
