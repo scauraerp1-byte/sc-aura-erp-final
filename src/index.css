@@ -228,8 +228,12 @@ html.theme-dark ::selection { background: rgba(255,255,255,0.18); color: #fff; }
    The following rules make those legacy classes render correctly in the
    light theme without needing to touch every file.
    ----------------------------------------------------------------------- */
+/*
 html.theme-light .text-white,
-html.theme-light [class*="text-white\\/"] { color: var(--sca-text) !important; }
+html.theme-light [class*="text-white\\/"] {
+  color: var(--sca-text) !important;
+}
+*/
 html.theme-light .text-white\/90 { color: var(--sca-text) !important; }
 html.theme-light .text-white\/80 { color: var(--sca-text-soft) !important; }
 html.theme-light .text-white\/70 { color: var(--sca-text-soft) !important; }
