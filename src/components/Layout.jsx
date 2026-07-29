@@ -65,7 +65,7 @@ export default function Layout({ children }) {
           <LogoBadge size={40} />
           <div className="min-w-0">
             <div className="font-display text-sm tracking-tight truncate">{brandName}</div>
-            <div className="text-[9px] uppercase tracking-[0.28em] text-white/45">Wholesale ERP</div>
+            <div className="text-[9px] uppercase tracking-[0.28em] text-[var(--sca-text-muted)]">Wholesale ERP</div>
           </div>
         </div>
         <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto scroll-hide">
@@ -77,11 +77,11 @@ export default function Layout({ children }) {
                 key={item.to}
                 to={item.to}
                 data-testid={`sidebar-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  active
-                    ? "bg-white/10 text-white border border-white/12"
-                    : "text-white/70 hover:bg-white/5 hover:text-white border border-transparent"
-                }`}
+               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+  active
+    ? "bg-[var(--sca-primary)] text-white border border-transparent"
+    : "text-[var(--sca-text-soft)] hover:bg-[var(--sca-surface-2)] hover:text-[var(--sca-text)] border border-transparent"
+}`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{item.label}</span>
@@ -166,7 +166,7 @@ export default function Layout({ children }) {
             <LogoBadge size={30} />
             <div className="min-w-0 flex-1">
               <div className="font-display text-sm truncate leading-tight">{brandName}</div>
-              <div className="text-[9px] uppercase tracking-[0.24em] text-white/45 truncate leading-tight">{getPageTitle(loc.pathname)}</div>
+              <div className="text-[9px] uppercase tracking-[0.24em] text-[var(--sca-text-muted)] truncate leading-tight">{getPageTitle(loc.pathname)}</div>
             </div>
           </div>
           <div className="hidden lg:block min-w-0">
@@ -224,7 +224,11 @@ function BottomItem({ item }) {
     <NavLink
       to={item.to}
       data-testid={`bottom-nav-${item.label.toLowerCase()}`}
-      className={`flex flex-col items-center gap-0.5 py-1.5 rounded-xl transition-colors ${active ? "text-white" : "text-white/55"}`}
+      className={`flex flex-col items-center gap-0.5 py-1.5 rounded-xl transition-colors ${
+  active
+    ? "text-[var(--sca-primary)]"
+    : "text-[var(--sca-text-muted)]"
+}`}
     >
       <Icon className={`w-5 h-5 ${active ? "opacity-100" : "opacity-80"}`} />
       <span className={`text-[10px] uppercase tracking-[0.18em] ${active ? "font-semibold" : "font-medium"}`}>{item.label}</span>
