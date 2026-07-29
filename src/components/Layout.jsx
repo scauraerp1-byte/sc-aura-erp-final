@@ -103,9 +103,9 @@ console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm truncate">{user?.name}</div>
-              <div className="text-[10px] uppercase tracking-[0.22em] text-white/55">{(user?.role || "").replace("_", " ")}</div>
+              <div className="text-[10px] uppercase tracking-[0.22em] text-[var(--sca-text-muted)]">{(user?.role || "").replace("_", " ")}</div>
             </div>
-            <button onClick={(e) => { e.stopPropagation(); handleLogout(); }} data-testid="logout-btn" className="text-white/50 hover:text-white">
+            <button onClick={(e) => { e.stopPropagation(); handleLogout(); }} data-testid="logout-btn" className="text-[var(--sca-text-muted)] hover:text-[var(--sca-text)]">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -126,7 +126,7 @@ console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
                 <LogoBadge size={32} />
                 <div className="font-display text-base truncate">{brandName}</div>
               </div>
-              <button onClick={() => setDrawer(false)} aria-label="Close menu" className="text-white/60 hover:text-white p-1">
+              <button onClick={() => setDrawer(false)} aria-label="Close menu" className="text-[var(--sca-text-muted)] hover:text-[var(--sca-text)] p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -139,11 +139,11 @@ console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
                     to={item.to}
                     data-testid={`drawer-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                     onClick={() => setDrawer(false)}
-                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                      isActive
-                        ? "bg-[var(--sca-primary)] text-white border border-transparent"
-                        : "text-white/75 hover:bg-white/5 border border-transparent"
-                    }`}
+                   className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+  isActive
+    ? "bg-[var(--sca-primary)] text-white border border-transparent"
+    : "text-[var(--sca-text)] hover:bg-[var(--sca-surface-2)] hover:text-[var(--sca-text)] border border-transparent"
+}`}
                   >
                     <Icon className="w-4 h-4" />
                     <span>{item.label}</span>
