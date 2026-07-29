@@ -19,3 +19,10 @@ export function useBodyLock(open) {
     };
   }, [open]);
 }
+useEffect(() => {
+  console.log("OPEN =", open);
+  console.log(
+    "HTML LOCK =",
+    document.documentElement.classList.contains("body-locked")
+  );
+}, [open]);
