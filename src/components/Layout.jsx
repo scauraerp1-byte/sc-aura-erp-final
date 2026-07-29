@@ -69,9 +69,7 @@ export default function Layout({ children }) {
           </div>
         </div>
         <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto scroll-hide">
-          console.log("SIDE", SIDE);
-console.log("ROLE", user.role);
-console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
+         
           {SIDE.filter((i) => allowed(i.roles)).map((item) => {
             const Icon = item.icon;
             const active = loc.pathname === item.to || (item.to !== "/" && loc.pathname.startsWith(item.to));
@@ -116,9 +114,12 @@ console.log("FILTERED", SIDE.filter((i) => allowed(i.roles)));
       {drawer && (
         <div className="lg:hidden fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setDrawer(false)}>
           <div
-            className="absolute left-0 top-0 bottom-0 w-72 border-r p-4 fade-up
-              bg-white border-[var(--sca-border)] text-[var(--sca-text)]
-              dark:bg-[#0e1218] dark:border-white/10 dark:text-white"
+          className="absolute left-0 top-0 bottom-0 w-72 border-r p-4 fade-up
+    bg-[var(--sca-surface)]
+    border-[var(--sca-border)]
+    text-[var(--sca-text)]"
+  onClick={(e) => e.stopPropagation()}
+>
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
