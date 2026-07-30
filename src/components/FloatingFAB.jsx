@@ -36,14 +36,11 @@ export default function FloatingFAB() {
   aria-hidden="true"
   data-testid="fab-backdrop"
   onClick={() => setOpen(false)}
-  className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] fade-up"
-/>
       )}
 
       <div className="fab-anchor fixed z-50 right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-8 flex flex-col items-end gap-2.5 pointer-events-none">
         {open && (
-          <div className="flex flex-col items-end gap-2 fade-up pointer-events-auto">
-            {actions.map((a) => {
+              {actions.map((a) => {
               const Icon = a.icon;
               return (
                 <button
