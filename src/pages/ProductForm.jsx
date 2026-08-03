@@ -20,11 +20,26 @@ export default function ProductForm() {
   const removeImage = (idx) => setForm(f => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
 
   const onPickImages = async (files) => {
-    const arr = await Promise.all(Array.from(files || []).map(file => new Promise((res) => {
-      const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file);
-    })));
-    setForm(f => ({ ...f, images: [...f.images, ...arr] }));
-  };
+  const uploaded = [];
+
+  for (const file of Array.from(files || [])) {
+    const body = new FormData();
+    body.append("file", file);
+
+    const { data } = await api.post("/uploads", body, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    uploaded.push(data.url);
+  }
+
+  setForm((f) => ({
+    ...f,
+    images: [...f.images, ...uploaded],
+  }));
+};
 
   const submit = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
