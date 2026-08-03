@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { formatApiError } from "../lib/api";
+import api, { API_BASE, formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
 import { Loader2, Image as ImageIcon, X } from "lucide-react";
@@ -32,7 +32,7 @@ export default function ProductForm() {
       },
     });
 
-    uploaded.push(data.url);
+    uploaded.push(`${API_BASE}${data.url.replace("/api", "")}`);
   }
 
   setForm((f) => ({
