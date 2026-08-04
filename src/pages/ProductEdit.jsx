@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import api, { formatApiError } from "../lib/api";
+import api, { API_BASE, formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle, Pill } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
 import { Loader2, Image as ImageIcon, X, ArrowLeft, Save, Trash2, History as HistoryIcon, Truck } from "lucide-react";
@@ -28,9 +28,26 @@ export default function ProductEdit() {
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const removeImage = (i) => setForm(f => ({ ...f, images: f.images.filter((_, idx) => idx !== i) }));
   const onPickImages = async (files) => {
-    const arr = await Promise.all(Array.from(files || []).slice(0, 4).map(file => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); })));
-    setForm(f => ({ ...f, images: [...f.images, ...arr].slice(0, 6) }));
-  };
+  const uploaded = [];
+
+  for (const file of Array.from(files || []).slice(0, 4)) {
+    const body = new FormData();
+    body.append("file", file);
+
+    const { data } = await api.post("/uploads", body, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    uploaded.push(`${API_BASE}${data.url.replace("/api", "")}`);
+  }
+
+  setForm((f) => ({
+    ...f,
+    images: [...f.images, ...uploaded].slice(0, 6),
+  }));
+};
   const updateSizeStock = (s, n) => setForm(f => ({ ...f, stock_by_size: { ...f.stock_by_size, [s]: Math.max(0, Number(n) || 0) } }));
 
   const save = async (e) => {
