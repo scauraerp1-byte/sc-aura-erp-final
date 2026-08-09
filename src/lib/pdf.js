@@ -262,7 +262,9 @@ didDrawCell: (data) => {
   } catch (error) {
     console.warn("Receipt image failed:", error);
   }
-},
+  },
+  });
+
   return doc.lastAutoTable.finalY + 5;
 }
 
