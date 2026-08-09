@@ -211,94 +211,77 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
       right: MARGIN,
     },
 
-    didDrawCell: (data) => {
-      if (
-        data.section === "body" &&
-        data.column.index === 2
-      ) {
-        const itemData = body[data.row.index];
+      didParseCell: (data) => {
+  if (
+    data.section === "body" &&
+    data.column.index === 2
+  ) {
+    const itemData = body[data.row.index];
 
-        if (itemData?.image) {
-          try {
-            const cell = data.cell;
+    if (itemData?.image) {
+      data.cell.minCellHeight = Math.max(
+        data.cell.minCellHeight || 0,
+        24
+      );
 
-            const imgSize = Math.min(
-              18,
-              cell.height - 4
-            );
+      // Leave space for the thumbnail inside Item / Description.
+      data.cell.text = data.cell.text.map(
+        (line) => `          ${line}`
+      );
+    }
+  }
+},
 
-            const imgX = cell.x + 2;
-            const imgY = cell.y + (cell.height - imgSize) / 2;
+didDrawCell: (data) => {
+  if (
+    data.section !== "body" ||
+    data.column.index !== 2
+  ) {
+    return;
+  }
 
-            doc.addImage(
-              itemData.image,
-              "JPEG",
-              imgX,
-              imgY,
-              imgSize,
-              imgSize
-            );
+  const itemData = body[data.row.index];
 
-            // Push the description visually to the right
-            // by covering the original text area and redrawing it.
-            doc.setFillColor(248, 250, 252);
-            doc.rect(
-              cell.x + 1,
-              cell.y + 1,
-              20,
-              cell.height - 2,
-              "F"
-            );
+  if (!itemData?.image) {
+    return;
+  }
 
-            doc.addImage(
-              itemData.image,
-              "JPEG",
-              imgX,
-              imgY,
-              imgSize,
-              imgSize
-            );
+  try {
+    const cell = data.cell;
+    const imgSize = 18;
 
-            const text = body[data.row.index].row[2];
+    const imgX = cell.x + 2;
+    const imgY = cell.y + (cell.height - imgSize) / 2;
 
-            doc.setTextColor(INK[0], INK[1], INK[2]);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8.2);
+    doc.addImage(
+      itemData.image,
+      "JPEG",
+      imgX,
+      imgY,
+      imgSize,
+      imgSize
+    );
+  } catch {
+    try {
+      const cell = data.cell;
+      const imgSize = 18;
 
-            const textX = cell.x + 22;
+      const imgX = cell.x + 2;
+      const imgY = cell.y + (cell.height - imgSize) / 2;
 
-            doc.text(
-              doc.splitTextToSize(
-                text,
-                cell.width - 24
-              ),
-              textX,
-              cell.y + 5
-            );
-          } catch {
-            // Keep PDF generation alive if an image fails.
-          }
-        }
-      }
-    },
-
-    didParseCell: (data) => {
-      if (
-        data.section === "body" &&
-        data.column.index === 2
-      ) {
-        const itemData = body[data.row.index];
-
-        if (itemData?.image) {
-          // Give image rows enough vertical space.
-          data.cell.minCellHeight = Math.max(
-            data.cell.minCellHeight || 0,
-            22
-          );
-        }
-      }
-    },
-  });
+      doc.addImage(
+        itemData.image,
+        "PNG",
+        imgX,
+        imgY,
+        imgSize,
+        imgSize
+      );
+    } catch {
+      // Ignore invalid image
+    }
+  }
+},
 
   return doc.lastAutoTable.finalY + 5;
 }
