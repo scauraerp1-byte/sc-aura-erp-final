@@ -122,39 +122,62 @@ function metaBlock(doc, entries, y) {
 
 async function itemsTable(doc, items, startY, { showPrice = true, showImages = true } = {}) {
   const head = showPrice
-    ? [["#", "SCA", "Item", "Qty", "Rate", "Amount"]]
-    : [["#", "SCA", "Item", "Qty"]];
+    ? [["#", "SCA", "Item / Description", "Qty", "Rate", "Amount"]]
+    : [["#", "SCA", "Item / Description", "Qty"]];
 
-  const body = items.map((it, i) => {
-    const totalQty = Object.values(it.sizes || {}).reduce((a, b) => a + b, 0);
-    const sizeBlock = Object.entries(it.sizes || {}).map(([s, n]) => `${s}:${n}`).join("  ");
-    const item = `${it.title || ""}\n${sizeBlock ? sizeBlock : ""}`;
-    if (showPrice) {
-      const lineTotal = totalQty * (Number(it.unit_price) || 0);
-      return [
-        String(i + 1),
-        it.sr_number || "",
-        item,
-        String(totalQty),
-        (Number(it.unit_price) || 0).toFixed(0),
-        lineTotal.toFixed(0),
-      ];
-    }
-    return [String(i + 1), it.sr_number || "", item, String(totalQty)];
-  });
+  const body = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+
+    const totalQty = Object.values(it.sizes || {}).reduce(
+      (a, b) => a + Number(b || 0),
+      0
+    );
+
+    const sizeBlock = Object.entries(it.sizes || {})
+      .map(([s, n]) => `${s}:${n}`)
+      .join("  ");
+
+    const image = showImages && it.image
+      ? await imgToDataUrl(it.image)
+      : null;
+
+    body.push({
+      row: showPrice
+        ? [
+            String(i + 1),
+            it.sr_number || "",
+            `${it.title || ""}${sizeBlock ? `\n${sizeBlock}` : ""}`,
+            String(totalQty),
+            (Number(it.unit_price) || 0).toFixed(0),
+            (totalQty * (Number(it.unit_price) || 0)).toFixed(0),
+          ]
+        : [
+            String(i + 1),
+            it.sr_number || "",
+            `${it.title || ""}${sizeBlock ? `\n${sizeBlock}` : ""}`,
+            String(totalQty),
+          ],
+      image,
+    });
+  }
 
   autoTable(doc, {
     startY,
     head,
-    body,
+    body: body.map((b) => b.row),
     theme: "grid",
+
     styles: {
-      fontSize: 8.5,
+      fontSize: 8.2,
       cellPadding: 2.2,
       lineColor: LINE,
       lineWidth: 0.15,
       textColor: INK,
+      valign: "middle",
     },
+
     headStyles: {
       fillColor: [17, 24, 39],
       textColor: [255, 255, 255],
@@ -162,92 +185,235 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
       fontSize: 8,
       halign: "left",
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+
     columnStyles: showPrice
       ? {
           0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: 22, fontStyle: "bold" },
+          1: { cellWidth: 21, fontStyle: "bold" },
           2: { cellWidth: "auto" },
-          3: { cellWidth: 12, halign: "right" },
+          3: { cellWidth: 11, halign: "right" },
           4: { cellWidth: 16, halign: "right" },
           5: { cellWidth: 20, halign: "right", fontStyle: "bold" },
         }
       : {
           0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: 24, fontStyle: "bold" },
+          1: { cellWidth: 22, fontStyle: "bold" },
           2: { cellWidth: "auto" },
           3: { cellWidth: 14, halign: "right" },
         },
-    margin: { left: MARGIN, right: MARGIN },
+
+    margin: {
+      left: MARGIN,
+      right: MARGIN,
+    },
+
+    didDrawCell: (data) => {
+      if (
+        data.section === "body" &&
+        data.column.index === 2
+      ) {
+        const itemData = body[data.row.index];
+
+        if (itemData?.image) {
+          try {
+            const cell = data.cell;
+
+            const imgSize = Math.min(
+              18,
+              cell.height - 4
+            );
+
+            const imgX = cell.x + 2;
+            const imgY = cell.y + (cell.height - imgSize) / 2;
+
+            doc.addImage(
+              itemData.image,
+              "JPEG",
+              imgX,
+              imgY,
+              imgSize,
+              imgSize
+            );
+
+            // Push the description visually to the right
+            // by covering the original text area and redrawing it.
+            doc.setFillColor(248, 250, 252);
+            doc.rect(
+              cell.x + 1,
+              cell.y + 1,
+              20,
+              cell.height - 2,
+              "F"
+            );
+
+            doc.addImage(
+              itemData.image,
+              "JPEG",
+              imgX,
+              imgY,
+              imgSize,
+              imgSize
+            );
+
+            const text = body[data.row.index].row[2];
+
+            doc.setTextColor(INK[0], INK[1], INK[2]);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.2);
+
+            const textX = cell.x + 22;
+
+            doc.text(
+              doc.splitTextToSize(
+                text,
+                cell.width - 24
+              ),
+              textX,
+              cell.y + 5
+            );
+          } catch {
+            // Keep PDF generation alive if an image fails.
+          }
+        }
+      }
+    },
+
+    didParseCell: (data) => {
+      if (
+        data.section === "body" &&
+        data.column.index === 2
+      ) {
+        const itemData = body[data.row.index];
+
+        if (itemData?.image) {
+          // Give image rows enough vertical space.
+          data.cell.minCellHeight = Math.max(
+            data.cell.minCellHeight || 0,
+            22
+          );
+        }
+      }
+    },
   });
 
-  let y = doc.lastAutoTable.finalY + 3;
-
-  // Optional image strip under table
-  if (showImages) {
-    const imgs = items.map((it) => it.image).filter(Boolean).slice(0, 8);
-    if (imgs.length) {
-      const W = 20, PAD = 2;
-      let x = MARGIN;
-      for (const src of imgs) {
-        const data = await imgToDataUrl(src);
-        if (!data) continue;
-        if (x + W > PAGE_W - MARGIN) { x = MARGIN; y += W + PAD; }
-        try { doc.addImage(data, "JPEG", x, y, W, W); }
-        catch { try { doc.addImage(data, "PNG", x, y, W, W); } catch {} }
-        x += W + PAD;
-      }
-      y += W + 3;
-    }
-  }
-  return y;
+  return doc.lastAutoTable.finalY + 5;
 }
 
 function totalsBlock(doc, lines, y) {
-  const rightW = 62;
-  const labelX = PAGE_W - MARGIN - rightW;
-  const valueX = PAGE_W - MARGIN;
+  const boxW = 70;
+  const rowH = 6.5;
+  const boxX = PAGE_W - MARGIN - boxW;
+  const boxH = lines.length * rowH + 8;
 
-  // Right-aligned box for totals
+  // Box
   doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(labelX - 2, y - 2, rightW + 4, lines.length * 6 + 4, 2.5, 2.5, "FD");
 
-  doc.setFontSize(9);
-  let cy = y + 3.5;
-  for (const [label, value, bold] of lines) {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setTextColor(bold ? INK[0] : MUTE[0], bold ? INK[1] : MUTE[1], bold ? INK[2] : MUTE[2]);
-    doc.text(label, labelX, cy);
-    doc.setTextColor(INK[0], INK[1], INK[2]);
-    doc.text(String(value), valueX, cy, { align: "right" });
-    cy += 6;
+  doc.roundedRect(
+    boxX,
+    y,
+    boxW,
+    boxH,
+    2.5,
+    2.5,
+    "FD"
+  );
+
+  let cy = y + 5.5;
+
+  for (let i = 0; i < lines.length; i++) {
+    const [label, value, bold] = lines[i];
+
+    doc.setFont(
+      "helvetica",
+      bold ? "bold" : "normal"
+    );
+
+    doc.setFontSize(bold ? 9 : 8.5);
+
+    doc.setTextColor(
+      bold ? INK[0] : MUTE[0],
+      bold ? INK[1] : MUTE[1],
+      bold ? INK[2] : MUTE[2]
+    );
+
+    doc.text(
+      String(label),
+      boxX + 3,
+      cy
+    );
+
+    doc.setTextColor(
+      INK[0],
+      INK[1],
+      INK[2]
+    );
+
+    doc.text(
+      String(value),
+      boxX + boxW - 3,
+      cy,
+      { align: "right" }
+    );
+
+    // Divider before important final amount
+    if (bold && i > 0) {
+      doc.setDrawColor(
+        LINE[0],
+        LINE[1],
+        LINE[2]
+      );
+
+      doc.line(
+        boxX + 3,
+        cy - 4.2,
+        boxX + boxW - 3,
+        cy - 4.2
+      );
+    }
+
+    cy += rowH;
   }
-  return cy + 2;
+
+  return y + boxH + 5;
 }
 
-async function footer(doc, branding, y, qrText, note) {
-  const boxY = Math.max(y + 4, PAGE_H - 32);
-  doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-  doc.line(MARGIN, boxY - 4, PAGE_W - MARGIN, boxY - 4);
+async function footer(doc, branding, y) {
+  const footerY = PAGE_H - 13;
 
-  // QR (left)
-  const qr = qrText ? await makeQr(qrText) : null;
-  if (qr) {
-    try { doc.addImage(qr, "PNG", MARGIN, boxY - 2, 18, 18); } catch {}
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(MUTE[0], MUTE[1], MUTE[2]);
-    doc.text("Scan to view digital receipt", MARGIN + 20, boxY + 3);
-    doc.text(qrText.length > 44 ? qrText.slice(0, 44) + "…" : qrText, MARGIN + 20, boxY + 7);
-  }
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
 
-  // Signature (right)
-  doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-  doc.line(PAGE_W - MARGIN - 46, boxY + 12, PAGE_W - MARGIN, boxY + 12);
-  doc.setFontSize(8);
-  doc.setTextColor(MUTE[0], MUTE[1], MUTE[2]);
-  doc.text("Authorised Signature", PAGE_W - MARGIN - 23, boxY + 16, { align: "center" });
+  doc.line(
+    MARGIN,
+    footerY - 5,
+    PAGE_W - MARGIN,
+    footerY - 5
+  );
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+
+  doc.setTextColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
+
+  doc.text(
+    branding?.company_name || "SC AURA KURTIS",
+    PAGE_W / 2,
+    footerY,
+    { align: "center" }
+  );
+}
 
   // Thank you note
   doc.setFontSize(7.5);
@@ -279,7 +445,7 @@ export async function buildBookingPDF(b, branding) {
     ["Remaining",        formatRupee(b.remaining),        true],
     ["Total Pieces",     String(totalPcs),                false],
   ], y);
-  await footer(doc, branding, y, `${window.location.origin}/r/booking/${b.id}`, "Booking receipt · Please retain for your records.");
+  await footer(doc, branding, y);
   return doc;
 }
 
@@ -304,7 +470,7 @@ export async function buildDispatchPDF(d, branding) {
     ["Final Payable",    formatRupee(d.final_payable),    true],
     ["Total Pieces",     String(totalPcs),                false],
   ], y);
-  await footer(doc, branding, y, `${window.location.origin}/r/dispatch/${d.id}`, "Dispatch receipt · Goods dispatched in good condition.");
+  await footer(doc, branding, y);
   return doc;
 }
 
@@ -327,7 +493,7 @@ export async function buildEstimatePDF(est, branding) {
     ["Advance Received", formatRupee(est.advance_received), false],
     ["Remaining",        formatRupee(est.remaining),        true],
   ], y);
-  await footer(doc, branding, y, null, "Estimate · Valid for 72 hours from the time of issue.");
+  await footer(doc, branding, y);
   return doc;
 }
 
