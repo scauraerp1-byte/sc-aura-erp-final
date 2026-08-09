@@ -2,20 +2,28 @@
  * SC AURA KURTIS
  * Professional A5 ERP Receipts
  *
- * Supports:
- * - Booking PDF
- * - Dispatch PDF
- * - Estimate PDF
- * - Product images inside Item / Description cell
- * - JPG / PNG / WebP image conversion
- * - Rupee formatting
- * - Clean totals block
- * - Minimal SC Aura Kurtis footer
+ * Documents:
+ * - Booking
+ * - Dispatch
+ * - Estimate
+ * - Return
+ *
+ * Locked receipt format:
+ * - Company header
+ * - Document number
+ * - Customer/meta information
+ * - Product image inside Item / Description cell
+ * - Clean totals box
+ * - Footer: SC Aura Kurtis only
+ *
+ * No QR
+ * No signature
+ * No thank-you note
+ * No extra footer text
  */
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import QRCode from "qrcode";
 import { formatRupee } from "./share";
 
 const PAGE_W = 148;
@@ -25,84 +33,81 @@ const MARGIN = 10;
 const INK = [17, 24, 39];
 const MUTE = [107, 114, 128];
 const LINE = [229, 231, 235];
-const LIGHT = [248, 250, 252];
+const SOFT = [248, 250, 252];
 const WHITE = [255, 255, 255];
 
 /* =========================================================
+   BACKEND URL
+========================================================= */
+
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.REACT_APP_BACKEND_URL ||
+  "";
+
+/* =========================================================
    IMAGE HELPERS
-   ========================================================= */
+========================================================= */
 
-function getItemImage(it) {
-  if (!it) return null;
-
-  // Support all common image field formats
-  if (typeof it.image === "string" && it.image) {
-    return it.image;
-  }
-
-  if (typeof it.image_url === "string" && it.image_url) {
-    return it.image_url;
-  }
-
-  if (typeof it.imageUrl === "string" && it.imageUrl) {
-    return it.imageUrl;
-  }
-
-  if (Array.isArray(it.images) && it.images.length) {
-    const first = it.images[0];
-
-    if (typeof first === "string") {
-      return first;
-    }
-
-    if (first?.url) {
-      return first.url;
-    }
-
-    if (first?.src) {
-      return first.src;
-    }
-  }
-
-  if (Array.isArray(it.image_urls) && it.image_urls.length) {
-    return it.image_urls[0];
-  }
-
-  if (Array.isArray(it.imageUrls) && it.imageUrls.length) {
-    return it.imageUrls[0];
-  }
-
-  return null;
-}
-
-/*
- * Converts ANY supported browser image
- * into JPEG data URL for jsPDF.
+/**
+ * Convert an image source into a data URL.
  *
- * This is important because jsPDF can fail
- * when directly receiving WebP / some PNG URLs.
+ * IMPORTANT:
+ * External URLs are NOT fetched directly from the browser.
+ * They are routed through the backend proxy to avoid CORS.
  */
-async function imgToDataUrl(src) {
+async function imageToDataUrl(src) {
   if (!src) return null;
 
-  try {
-    /*
-     * Already a data URL.
-     */
-    let source = src;
+  if (typeof src !== "string") {
+    return null;
+  }
 
-    /*
-     * Remote URL -> fetch blob -> data URL
-     */
-    if (!src.startsWith("data:")) {
-      const response = await fetch(src, {
-        mode: "cors",
-        credentials: "omit",
-      });
+  // Already a data URL
+  if (src.startsWith("data:image/")) {
+    return src;
+  }
+
+  // Blob URL
+  if (src.startsWith("blob:")) {
+    try {
+      const response = await fetch(src);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const blob = await response.blob();
+
+      return await blobToDataUrl(blob);
+    } catch {
+      return null;
+    }
+  }
+
+  // Absolute external URL
+  if (
+    src.startsWith("http://") ||
+    src.startsWith("https://")
+  ) {
+    try {
+      if (!BACKEND_URL) {
+        console.warn(
+          "PDF image skipped: backend URL is not configured.",
+          src
+        );
+
+        return null;
+      }
+
+      const proxyUrl =
+        `${BACKEND_URL}/api/images/proxy?url=${encodeURIComponent(src)}`;
+
+      const response = await fetch(proxyUrl);
 
       if (!response.ok) {
         console.warn(
-          "PDF image fetch failed:",
+          "PDF image proxy failed:",
           response.status,
           src
         );
@@ -112,179 +117,121 @@ async function imgToDataUrl(src) {
 
       const blob = await response.blob();
 
-      source = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
+      return await blobToDataUrl(blob);
+    } catch (error) {
+      console.warn(
+        "PDF image loading failed:",
+        src,
+        error
+      );
 
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-
-        reader.readAsDataURL(blob);
-      });
-    }
-
-    /*
-     * Browser image decode.
-     */
-    const img = new Image();
-
-    /*
-     * Needed for remote CORS images.
-     */
-    img.crossOrigin = "anonymous";
-
-    img.src = source;
-
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-    });
-
-    const width = img.naturalWidth || img.width;
-    const height = img.naturalHeight || img.height;
-
-    if (!width || !height) {
       return null;
     }
-
-    /*
-     * Convert to canvas.
-     */
-    const canvas = document.createElement("canvas");
-
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      return null;
-    }
-
-    /*
-     * White background so transparent PNG/WebP
-     * doesn't become black in the PDF.
-     */
-    ctx.fillStyle = "#ffffff";
-
-    ctx.fillRect(
-      0,
-      0,
-      width,
-      height
-    );
-
-    /*
-     * Draw source image.
-     */
-    ctx.drawImage(
-      img,
-      0,
-      0,
-      width,
-      height
-    );
-
-    /*
-     * Always return JPEG.
-     */
-    return canvas.toDataURL(
-      "image/jpeg",
-      0.92
-    );
-
-  } catch (error) {
-    console.warn(
-      "PDF image conversion failed:",
-      src,
-      error
-    );
-
-    return null;
   }
-}
 
-/* =========================================================
-   QR
-   ========================================================= */
-
-async function makeQr(text) {
+  // Relative URL
   try {
-    return await QRCode.toDataURL(
-      text,
-      {
-        margin: 0,
-        scale: 4,
-        color: {
-          dark: "#111827",
-          light: "#ffffff",
-        },
-      }
-    );
+    const response = await fetch(src);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob = await response.blob();
+
+    return await blobToDataUrl(blob);
   } catch {
     return null;
   }
 }
 
-/* =========================================================
-   MONEY
-   ========================================================= */
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-function money(value) {
-  const amount = Number(value) || 0;
+    reader.onload = () => {
+      resolve(reader.result);
+    };
 
-  return formatRupee(amount);
+    reader.onerror = reject;
+
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Detect correct image type for jsPDF.
+ */
+function getImageType(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string") {
+    return "JPEG";
+  }
+
+  if (dataUrl.startsWith("data:image/png")) {
+    return "PNG";
+  }
+
+  if (dataUrl.startsWith("data:image/webp")) {
+    return "WEBP";
+  }
+
+  return "JPEG";
 }
 
 /* =========================================================
-   DOCUMENT
-   ========================================================= */
+   PDF BASE
+========================================================= */
 
 export function newReceiptDoc() {
   return new jsPDF({
     unit: "mm",
     format: "a5",
     orientation: "portrait",
+    compress: true,
   });
 }
 
 /* =========================================================
    HEADER
-   ========================================================= */
+========================================================= */
 
-async function header(
+async function drawHeader(
   doc,
   branding,
-  titleText,
-  subTitle
+  title,
+  documentNumber
 ) {
-  const y0 = MARGIN;
-  const H = 30;
+  const y = MARGIN;
 
-  let xText = MARGIN;
+  const logoSize = 20;
+  const headerHeight = 30;
+
+  let textX = MARGIN;
 
   /*
-   * Company logo
+   * Logo
    */
   if (branding?.logo_url) {
-    const logo = await imgToDataUrl(
+    const logo = await imageToDataUrl(
       branding.logo_url
     );
 
     if (logo) {
       try {
+        const type = getImageType(logo);
+
         doc.addImage(
           logo,
-          "JPEG",
+          type,
           MARGIN,
-          y0,
-          20,
-          20
+          y,
+          logoSize,
+          logoSize
         );
 
-        xText = MARGIN + 24;
-
+        textX = MARGIN + 24;
       } catch {
-        // Ignore logo errors
+        textX = MARGIN;
       }
     }
   }
@@ -307,20 +254,20 @@ async function header(
 
   doc.text(
     branding?.company_name ||
-      "SC AURA KURTIS",
-    xText,
-    y0 + 5.5
+      "SC Aura Kurtis",
+    textX,
+    y + 5.5
   );
 
   /*
-   * Company details
+   * Company information
    */
   doc.setFont(
     "helvetica",
     "normal"
   );
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
 
   doc.setTextColor(
     MUTE[0],
@@ -328,56 +275,59 @@ async function header(
     MUTE[2]
   );
 
-  const linesRaw = [];
+  const information = [];
 
   if (branding?.address) {
-    linesRaw.push(
+    information.push(
       branding.address
     );
   }
 
-  const line2Bits = [
-    branding?.phone,
+  const secondLine = [
+    branding?.phone || null,
     branding?.gst
       ? `GST: ${branding.gst}`
       : null,
   ].filter(Boolean);
 
-  if (line2Bits.length) {
-    linesRaw.push(
-      line2Bits.join("  ·  ")
+  if (secondLine.length) {
+    information.push(
+      secondLine.join("  ·  ")
     );
   }
 
-  let ry = y0 + 10.5;
+  let infoY = y + 10.5;
 
-  for (const line of linesRaw) {
+  for (const line of information) {
     const wrapped =
       doc.splitTextToSize(
-        line,
+        String(line),
         PAGE_W -
-          xText -
+          textX -
           MARGIN -
-          40
+          44
       );
 
     doc.text(
       wrapped,
-      xText,
-      ry
+      textX,
+      infoY
     );
 
-    ry +=
-      wrapped.length * 3.6;
+    infoY +=
+      wrapped.length * 3.5;
   }
 
   /*
-   * Booking / Dispatch / Estimate box
+   * Document number box
    */
+  const boxW = 44;
+  const boxH = 20;
+
   const boxX =
     PAGE_W -
     MARGIN -
-    44;
+    boxW;
 
   doc.setDrawColor(
     LINE[0],
@@ -386,16 +336,16 @@ async function header(
   );
 
   doc.setFillColor(
-    LIGHT[0],
-    LIGHT[1],
-    LIGHT[2]
+    SOFT[0],
+    SOFT[1],
+    SOFT[2]
   );
 
   doc.roundedRect(
     boxX,
-    y0,
-    44,
-    20,
+    y,
+    boxW,
+    boxH,
     2.5,
     2.5,
     "FD"
@@ -415,9 +365,9 @@ async function header(
   );
 
   doc.text(
-    titleText,
-    boxX + 22,
-    y0 + 7,
+    title,
+    boxX + boxW / 2,
+    y + 7,
     {
       align: "center",
     }
@@ -428,12 +378,12 @@ async function header(
     "normal"
   );
 
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
 
   doc.text(
-    subTitle || "",
-    boxX + 22,
-    y0 + 14,
+    documentNumber || "",
+    boxX + boxW / 2,
+    y + 14,
     {
       align: "center",
     }
@@ -442,6 +392,9 @@ async function header(
   /*
    * Divider
    */
+  const dividerY =
+    y + headerHeight + 1;
+
   doc.setDrawColor(
     LINE[0],
     LINE[1],
@@ -450,52 +403,58 @@ async function header(
 
   doc.line(
     MARGIN,
-    y0 + H + 1,
+    dividerY,
     PAGE_W - MARGIN,
-    y0 + H + 1
+    dividerY
   );
 
-  return y0 + H + 5;
+  return dividerY + 5;
 }
 
 /* =========================================================
-   META
-   ========================================================= */
+   META BLOCK
+========================================================= */
 
-function metaBlock(
+function drawMetaBlock(
   doc,
   entries,
-  y
+  startY
 ) {
-  const colW =
-    (PAGE_W - MARGIN * 2) / 2;
+  const contentWidth =
+    PAGE_W - MARGIN * 2;
 
-  doc.setFontSize(9);
+  const colWidth =
+    contentWidth / 2;
 
-  const rows =
-    Math.ceil(
-      entries.length / 2
-    );
+  const rowHeight = 6.5;
+
+  const rows = Math.ceil(
+    entries.length / 2
+  );
+
+  doc.setFontSize(8.5);
 
   for (
-    let i = 0;
-    i < entries.length;
-    i++
+    let index = 0;
+    index < entries.length;
+    index++
   ) {
-    const [
-      label,
-      value,
-    ] = entries[i];
+    const [label, value] =
+      entries[index];
 
-    const col =
-      i % 2;
+    const column =
+      index % 2;
 
     const row =
-      Math.floor(i / 2);
+      Math.floor(index / 2);
 
     const x =
       MARGIN +
-      col * colW;
+      column * colWidth;
+
+    const y =
+      startY +
+      row * rowHeight;
 
     /*
      * Label
@@ -514,7 +473,7 @@ function metaBlock(
     doc.text(
       String(label),
       x,
-      y + row * 6.2
+      y
     );
 
     /*
@@ -531,33 +490,86 @@ function metaBlock(
       INK[2]
     );
 
+    const valueText =
+      value === null ||
+      value === undefined ||
+      value === ""
+        ? "—"
+        : String(value);
+
     const wrapped =
       doc.splitTextToSize(
-        String(
-          value || "—"
-        ),
-        colW - 4
+        valueText,
+        colWidth - 28
       );
 
     doc.text(
       wrapped,
-      x + 22,
-      y + row * 6.2
+      x + 23,
+      y
     );
   }
 
   return (
-    y +
-    rows * 6.2 +
+    startY +
+    rows * rowHeight +
     3
   );
 }
 
 /* =========================================================
-   ITEMS TABLE
-   ========================================================= */
+   PRODUCT DESCRIPTION
+========================================================= */
 
-async function itemsTable(
+function getSizeText(item) {
+  if (
+    !item ||
+    !item.sizes ||
+    typeof item.sizes !== "object"
+  ) {
+    return "";
+  }
+
+  return Object.entries(
+    item.sizes
+  )
+    .filter(
+      ([, quantity]) =>
+        Number(quantity || 0) > 0
+    )
+    .map(
+      ([size, quantity]) =>
+        `${size}:${quantity}`
+    )
+    .join("  ");
+}
+
+function getTotalQuantity(item) {
+  if (
+    !item ||
+    !item.sizes ||
+    typeof item.sizes !== "object"
+  ) {
+    return Number(
+      item?.quantity || 0
+    );
+  }
+
+  return Object.values(
+    item.sizes
+  ).reduce(
+    (total, quantity) =>
+      total +
+      Number(quantity || 0),
+    0
+  );
+}
+
+/* =========================================================
+   PRODUCT TABLE
+========================================================= */
+
+async function drawItemsTable(
   doc,
   items,
   startY,
@@ -566,6 +578,65 @@ async function itemsTable(
     showImages = true,
   } = {}
 ) {
+  const sourceItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  /*
+   * Prepare all images BEFORE
+   * AutoTable starts.
+   */
+  const preparedItems = [];
+
+  for (
+    let index = 0;
+    index < sourceItems.length;
+    index++
+  ) {
+    const item =
+      sourceItems[index];
+
+    const totalQty =
+      getTotalQuantity(item);
+
+    const sizeText =
+      getSizeText(item);
+
+    let image = null;
+
+    if (
+      showImages &&
+      item?.image
+    ) {
+      image =
+        await imageToDataUrl(
+          item.image
+        );
+    }
+
+    const description =
+      `${item?.title || ""}` +
+      `${sizeText ? `\n${sizeText}` : ""}`;
+
+    const unitPrice =
+      Number(
+        item?.unit_price || 0
+      );
+
+    const amount =
+      totalQty * unitPrice;
+
+    preparedItems.push({
+      item,
+      image,
+      description,
+      totalQty,
+      unitPrice,
+      amount,
+    });
+  }
+
   const head = showPrice
     ? [
         [
@@ -586,106 +657,35 @@ async function itemsTable(
         ],
       ];
 
-  /*
-   * Build rows first.
-   */
-  const body = [];
+  const body =
+    preparedItems.map(
+      (entry, index) => {
+        if (showPrice) {
+          return [
+            String(index + 1),
+            entry.item?.sr_number || "",
+            entry.description,
+            String(entry.totalQty),
+            entry.unitPrice.toFixed(0),
+            entry.amount.toFixed(0),
+          ];
+        }
 
-  for (
-    let i = 0;
-    i < items.length;
-    i++
-  ) {
-    const it =
-      items[i] || {};
-
-    const totalQty =
-      Object.values(
-        it.sizes || {}
-      ).reduce(
-        (sum, qty) =>
-          sum +
-          Number(qty || 0),
-        0
-      );
-
-    const sizeBlock =
-      Object.entries(
-        it.sizes || {}
-      )
-        .map(
-          ([size, qty]) =>
-            `${size}:${qty}`
-        )
-        .join("  ");
-
-    /*
-     * Find product image.
-     */
-    let image = null;
-
-    if (showImages) {
-      const imageSource =
-        getItemImage(it);
-
-      if (imageSource) {
-        image =
-          await imgToDataUrl(
-            imageSource
-          );
+        return [
+          String(index + 1),
+          entry.item?.sr_number || "",
+          entry.description,
+          String(entry.totalQty),
+        ];
       }
-    }
+    );
 
-    const title =
-      it.title || "";
-
-    const description =
-      sizeBlock
-        ? `${title}\n${sizeBlock}`
-        : title;
-
-    const unitPrice =
-      Number(
-        it.unit_price
-      ) || 0;
-
-    const lineTotal =
-      totalQty *
-      unitPrice;
-
-    body.push({
-      row: showPrice
-        ? [
-            String(i + 1),
-            it.sr_number || "",
-            description,
-            String(totalQty),
-            money(unitPrice),
-            money(lineTotal),
-          ]
-        : [
-            String(i + 1),
-            it.sr_number || "",
-            description,
-            String(totalQty),
-          ],
-
-      image,
-    });
-  }
-
-  /*
-   * Generate table.
-   */
   autoTable(doc, {
     startY,
 
     head,
 
-    body: body.map(
-      (item) =>
-        item.row
-    ),
+    body,
 
     theme: "grid",
 
@@ -695,17 +695,17 @@ async function itemsTable(
       cellPadding: 2.2,
 
       lineColor: LINE,
-
       lineWidth: 0.15,
 
       textColor: INK,
 
       valign: "middle",
+
+      overflow: "linebreak",
     },
 
     headStyles: {
       fillColor: INK,
-
       textColor: WHITE,
 
       fontStyle: "bold",
@@ -718,77 +718,61 @@ async function itemsTable(
     },
 
     alternateRowStyles: {
-      fillColor: LIGHT,
+      fillColor: SOFT,
     },
 
-    columnStyles:
-      showPrice
-        ? {
-            0: {
-              cellWidth: 8,
-              halign:
-                "center",
-            },
-
-            1: {
-              cellWidth: 21,
-              fontStyle:
-                "bold",
-            },
-
-            /*
-             * Description gets
-             * the remaining space.
-             */
-            2: {
-              cellWidth:
-                "auto",
-            },
-
-            3: {
-              cellWidth: 11,
-              halign:
-                "right",
-            },
-
-            4: {
-              cellWidth: 18,
-              halign:
-                "right",
-            },
-
-            5: {
-              cellWidth: 22,
-              halign:
-                "right",
-              fontStyle:
-                "bold",
-            },
-          }
-        : {
-            0: {
-              cellWidth: 8,
-              halign:
-                "center",
-            },
-
-            1: {
-              cellWidth: 22,
-              fontStyle:
-                "bold",
-            },
-
-            2: {
-              cellWidth:
-                "auto",
-            },
-
-            3: {
-              cellWidth: 14,
-              halign:
-                "right",
-            },
+    columnStyles: showPrice
+      ? {
+          0: {
+            cellWidth: 8,
+            halign: "center",
           },
+
+          1: {
+            cellWidth: 21,
+            fontStyle: "bold",
+          },
+
+          2: {
+            cellWidth: "auto",
+          },
+
+          3: {
+            cellWidth: 11,
+            halign: "right",
+          },
+
+          4: {
+            cellWidth: 16,
+            halign: "right",
+          },
+
+          5: {
+            cellWidth: 20,
+            halign: "right",
+            fontStyle: "bold",
+          },
+        }
+      : {
+          0: {
+            cellWidth: 8,
+            halign: "center",
+          },
+
+          1: {
+            cellWidth: 22,
+            fontStyle: "bold",
+          },
+
+          2: {
+            cellWidth: "auto",
+          },
+
+          3: {
+            cellWidth: 14,
+            halign: "right",
+          },
+        },
 
     margin: {
       left: MARGIN,
@@ -796,237 +780,180 @@ async function itemsTable(
     },
 
     /*
-     * Reserve enough height
-     * for product image.
+     * Make image rows taller.
      */
-    didParseCell:
-      (data) => {
-        if (
-          data.section !==
-            "body" ||
-          data.column.index !==
-            2
-        ) {
-          return;
-        }
-
-        const itemData =
-          body[
+    didParseCell(data) {
+      if (
+        data.section === "body" &&
+        data.column.index === 2
+      ) {
+        const entry =
+          preparedItems[
             data.row.index
           ];
 
-        if (
-          itemData?.image
-        ) {
+        if (entry?.image) {
           data.cell.minCellHeight =
             Math.max(
-              Number(
-                data.cell
-                  .minCellHeight
-              ) || 0,
+              data.cell.minCellHeight || 0,
               25
             );
-
-          /*
-           * IMPORTANT:
-           * Remove AutoTable's
-           * original description
-           * text.
-           *
-           * We redraw it ourselves
-           * beside the image.
-           */
-          data.cell.text =
-            [];
         }
-      },
+      }
+    },
 
     /*
-     * Draw image + description
-     * inside the same Item cell.
+     * Draw image INSIDE
+     * Item / Description cell.
      */
-    didDrawCell:
-      (data) => {
-        if (
-          data.section !==
-            "body" ||
-          data.column.index !==
-            2
-        ) {
-          return;
-        }
+    didDrawCell(data) {
+      if (
+        data.section !== "body"
+      ) {
+        return;
+      }
 
-        const itemData =
-          body[
-            data.row.index
-          ];
+      if (
+        data.column.index !== 2
+      ) {
+        return;
+      }
 
-        if (
-          !itemData?.image
-        ) {
-          /*
-           * No image:
-           * AutoTable already
-           * removed the text only
-           * when image exists.
-           */
-          return;
-        }
+      const entry =
+        preparedItems[
+          data.row.index
+        ];
 
-        const cell =
-          data.cell;
+      if (!entry?.image) {
+        return;
+      }
 
-        try {
-          /*
-           * Image container.
-           */
-          const imageSize =
-            Math.min(
-              20,
-              cell.height - 4
-            );
+      const cell =
+        data.cell;
 
-          const imageX =
-            cell.x + 2;
+      const padding = 2;
 
-          const imageY =
-            cell.y +
-            (
-              cell.height -
-              imageSize
-            ) /
-              2;
+      const imageSize =
+        Math.min(
+          19,
+          cell.height -
+            padding * 2
+        );
 
-          /*
-           * White image background.
-           */
-          doc.setFillColor(
-            WHITE[0],
-            WHITE[1],
-            WHITE[2]
+      const imageX =
+        cell.x + padding;
+
+      const imageY =
+        cell.y +
+        (cell.height -
+          imageSize) /
+          2;
+
+      try {
+        const imageType =
+          getImageType(
+            entry.image
           );
 
-          doc.roundedRect(
-            imageX,
-            imageY,
-            imageSize,
-            imageSize,
-            1.5,
-            1.5,
-            "F"
+        /*
+         * Cover the part where
+         * AutoTable originally
+         * printed description.
+         */
+        doc.setFillColor(
+          cell.fillColor?.[0] ??
+            SOFT[0],
+          cell.fillColor?.[1] ??
+            SOFT[1],
+          cell.fillColor?.[2] ??
+            SOFT[2]
+        );
+
+        doc.rect(
+          cell.x + 0.8,
+          cell.y + 0.8,
+          21,
+          cell.height - 1.6,
+          "F"
+        );
+
+        /*
+         * Image
+         */
+        doc.addImage(
+          entry.image,
+          imageType,
+          imageX,
+          imageY,
+          imageSize,
+          imageSize
+        );
+
+        /*
+         * Description text
+         */
+        const textX =
+          cell.x +
+          imageSize +
+          5;
+
+        const availableWidth =
+          cell.width -
+          imageSize -
+          7;
+
+        doc.setFont(
+          "helvetica",
+          "normal"
+        );
+
+        doc.setFontSize(8.1);
+
+        doc.setTextColor(
+          INK[0],
+          INK[1],
+          INK[2]
+        );
+
+        const text =
+          doc.splitTextToSize(
+            entry.description,
+            Math.max(
+              10,
+              availableWidth
+            )
           );
 
-          /*
-           * Actual product image.
-           */
-          doc.addImage(
-            itemData.image,
-            "JPEG",
-            imageX,
-            imageY,
-            imageSize,
-            imageSize
-          );
-
-          /*
-           * Description text.
-           */
-          const text =
-            itemData.row[2];
-
-          const textX =
-            cell.x + 25;
-
-          const textWidth =
-            cell.width - 28;
-
-          doc.setFont(
-            "helvetica",
-            "normal"
-          );
-
-          doc.setFontSize(
-            8.1
-          );
-
-          doc.setTextColor(
-            INK[0],
-            INK[1],
-            INK[2]
-          );
-
-          const wrapped =
-            doc.splitTextToSize(
-              text,
-              textWidth
-            );
-
-          /*
-           * Vertically center
-           * description.
-           */
-          const lineHeight =
-            3.5;
-
-          const textHeight =
-            wrapped.length *
-            lineHeight;
-
-          let textY =
-            cell.y +
-            (
-              cell.height -
-              textHeight
-            ) /
-              2 +
-            2.8;
-
-          if (
-            textY <
-            cell.y + 4
-          ) {
-            textY =
-              cell.y + 4;
-          }
-
-          doc.text(
-            wrapped,
-            textX,
-            textY
-          );
-
-        } catch (
+        doc.text(
+          text,
+          textX,
+          cell.y + 5
+        );
+      } catch (error) {
+        console.warn(
+          "Unable to draw product image:",
           error
-        ) {
-          console.warn(
-            "Could not draw product image:",
-            error
-          );
-        }
-      },
+        );
+      }
+    },
   });
 
   return (
-    doc.lastAutoTable
-      .finalY + 5
+    doc.lastAutoTable.finalY +
+    5
   );
 }
 
 /* =========================================================
-   TOTALS
-   ========================================================= */
+   TOTALS BOX
+========================================================= */
 
-function totalsBlock(
+function drawTotalsBlock(
   doc,
   lines,
-  y
+  startY
 ) {
-  /*
-   * Slightly wider box so
-   * ₹ amounts never get clipped.
-   */
-  const boxW = 74;
-
+  const boxW = 70;
   const rowH = 6.5;
 
   const boxX =
@@ -1040,7 +967,7 @@ function totalsBlock(
     8;
 
   /*
-   * Background.
+   * Box
    */
   doc.setDrawColor(
     LINE[0],
@@ -1049,14 +976,14 @@ function totalsBlock(
   );
 
   doc.setFillColor(
-    LIGHT[0],
-    LIGHT[1],
-    LIGHT[2]
+    SOFT[0],
+    SOFT[1],
+    SOFT[2]
   );
 
   doc.roundedRect(
     boxX,
-    y,
+    startY,
     boxW,
     boxH,
     2.5,
@@ -1064,23 +991,44 @@ function totalsBlock(
     "FD"
   );
 
-  let cy =
-    y + 5.5;
+  let currentY =
+    startY + 5.5;
 
   for (
-    let i = 0;
-    i < lines.length;
-    i++
+    let index = 0;
+    index < lines.length;
+    index++
   ) {
     const [
       label,
       value,
       bold,
-    ] = lines[i];
+    ] = lines[index];
 
     /*
-     * Label.
+     * Divider before
+     * highlighted final value.
      */
+    if (
+      bold &&
+      index > 0
+    ) {
+      doc.setDrawColor(
+        LINE[0],
+        LINE[1],
+        LINE[2]
+      );
+
+      doc.line(
+        boxX + 3,
+        currentY - 4.2,
+        boxX +
+          boxW -
+          3,
+        currentY - 4.2
+      );
+    }
+
     doc.setFont(
       "helvetica",
       bold
@@ -1096,11 +1044,9 @@ function totalsBlock(
       bold
         ? INK[0]
         : MUTE[0],
-
       bold
         ? INK[1]
         : MUTE[1],
-
       bold
         ? INK[2]
         : MUTE[2]
@@ -1109,21 +1055,7 @@ function totalsBlock(
     doc.text(
       String(label),
       boxX + 3,
-      cy
-    );
-
-    /*
-     * Value.
-     */
-    doc.setFont(
-      "helvetica",
-      bold
-        ? "bold"
-        : "normal"
-    );
-
-    doc.setFontSize(
-      bold ? 9 : 8.5
+      currentY
     );
 
     doc.setTextColor(
@@ -1137,41 +1069,17 @@ function totalsBlock(
       boxX +
         boxW -
         3,
-      cy,
+      currentY,
       {
         align: "right",
       }
     );
 
-    /*
-     * Divider before
-     * important final amount.
-     */
-    if (
-      bold &&
-      i > 0
-    ) {
-      doc.setDrawColor(
-        LINE[0],
-        LINE[1],
-        LINE[2]
-      );
-
-      doc.line(
-        boxX + 3,
-        cy - 4.2,
-        boxX +
-          boxW -
-          3,
-        cy - 4.2
-      );
-    }
-
-    cy += rowH;
+    currentY += rowH;
   }
 
   return (
-    y +
+    startY +
     boxH +
     5
   );
@@ -1179,18 +1087,12 @@ function totalsBlock(
 
 /* =========================================================
    FOOTER
-   ========================================================= */
+========================================================= */
 
-async function footer(
+function drawFooter(
   doc,
-  branding,
-  y
+  branding
 ) {
-  /*
-   * User requested:
-   * only SC Aura Kurtis
-   * in the middle.
-   */
   const footerY =
     PAGE_H - 13;
 
@@ -1220,6 +1122,10 @@ async function footer(
     INK[2]
   );
 
+  /*
+   * LOCKED:
+   * Footer only company name.
+   */
   doc.text(
     branding?.company_name ||
       "SC Aura Kurtis",
@@ -1232,71 +1138,102 @@ async function footer(
 }
 
 /* =========================================================
-   BOOKING
-   ========================================================= */
+   TOTAL PIECES
+========================================================= */
+
+function calculateTotalPieces(
+  items
+) {
+  return (
+    Array.isArray(items)
+      ? items
+      : []
+  ).reduce(
+    (total, item) =>
+      total +
+      getTotalQuantity(item),
+    0
+  );
+}
+
+/* =========================================================
+   BOOKING PDF
+========================================================= */
 
 export async function buildBookingPDF(
-  b,
+  booking,
   branding
 ) {
   const doc =
     newReceiptDoc();
 
   let y =
-    await header(
+    await drawHeader(
       doc,
       branding,
       "BOOKING",
-      b.booking_no
+      booking?.booking_no
     );
 
-  y = metaBlock(
-    doc,
-    [
+  y =
+    drawMetaBlock(
+      doc,
       [
-        "Date",
-        new Date(
-          b.created_at
-        ).toLocaleString(),
-      ],
+        [
+          "Date",
+          booking?.created_at
+            ? new Date(
+                booking.created_at
+              ).toLocaleString()
+            : "—",
+        ],
 
-      [
-        "Booking No",
-        b.booking_no,
-      ],
+        [
+          "Booking No",
+          booking?.booking_no ||
+            "—",
+        ],
 
-      [
-        "Customer",
-        b.customer_snapshot
-          ?.name || "—",
-      ],
+        [
+          "Customer",
+          booking
+            ?.customer_snapshot
+            ?.name ||
+            "—",
+        ],
 
-      [
-        "Shop",
-        b.customer_snapshot
-          ?.shop_name || "—",
-      ],
+        [
+          "Shop",
+          booking
+            ?.customer_snapshot
+            ?.shop_name ||
+            "—",
+        ],
 
-      [
-        "Phone",
-        b.customer_snapshot
-          ?.phone || "—",
-      ],
+        [
+          "Phone",
+          booking
+            ?.customer_snapshot
+            ?.phone ||
+            "—",
+        ],
 
-      [
-        "Status",
-        (
-          b.status || ""
-        ).toUpperCase(),
+        [
+          "Status",
+          (
+            booking?.status ||
+            ""
+          ).toUpperCase() ||
+            "—",
+        ],
       ],
-    ],
-    y
-  );
+      y
+    );
 
   y =
-    await itemsTable(
+    await drawItemsTable(
       doc,
-      b.items || [],
+      booking?.items || [],
       y,
       {
         showPrice: true,
@@ -1304,150 +1241,132 @@ export async function buildBookingPDF(
       }
     );
 
-  const totalPcs =
-    (
-      b.items || []
-    ).reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        Object.values(
-          item.sizes || {}
-        ).reduce(
-          (
-            a,
-            n
-          ) =>
-            a +
-            Number(
-              n || 0
-            ),
-          0
-        ),
-      0
+  const totalPieces =
+    calculateTotalPieces(
+      booking?.items || []
     );
 
   y =
-    totalsBlock(
+    drawTotalsBlock(
       doc,
       [
         [
           "Item Total",
-          money(
-            b.item_total
+          formatRupee(
+            booking?.item_total
           ),
           false,
         ],
 
         [
           "Advance Received",
-          money(
-            b.advance_received
+          formatRupee(
+            booking?.advance_received
           ),
           false,
         ],
 
         [
           "Remaining",
-          money(
-            b.remaining
+          formatRupee(
+            booking?.remaining
           ),
           true,
         ],
 
         [
           "Total Pieces",
-          String(
-            totalPcs
-          ),
+          String(totalPieces),
           false,
         ],
       ],
       y
     );
 
-  await footer(
+  drawFooter(
     doc,
-    branding,
-    y
+    branding
   );
 
   return doc;
 }
 
 /* =========================================================
-   DISPATCH
-   ========================================================= */
+   DISPATCH PDF
+========================================================= */
 
 export async function buildDispatchPDF(
-  d,
+  dispatch,
   branding
 ) {
   const doc =
     newReceiptDoc();
 
   let y =
-    await header(
+    await drawHeader(
       doc,
       branding,
       "DISPATCH",
-      d.dispatch_no
+      dispatch?.dispatch_no
     );
 
-  y = metaBlock(
-    doc,
-    [
+  y =
+    drawMetaBlock(
+      doc,
       [
-        "Date",
-        new Date(
-          d.created_at
-        ).toLocaleString(),
-      ],
+        [
+          "Date",
+          dispatch?.created_at
+            ? new Date(
+                dispatch.created_at
+              ).toLocaleString()
+            : "—",
+        ],
 
-      [
-        "Dispatch No",
-        d.dispatch_no,
-      ],
+        [
+          "Dispatch No",
+          dispatch?.dispatch_no ||
+            "—",
+        ],
 
-      [
-        "Dispatch To",
-        d.dispatch_to ||
-          "—",
-      ],
+        [
+          "Dispatch To",
+          dispatch?.dispatch_to ||
+            "—",
+        ],
 
-      [
-        "Phone",
-        d.phone || "—",
-      ],
+        [
+          "Phone",
+          dispatch?.phone ||
+            "—",
+        ],
 
-      [
-        "Payment Mode",
-        (
-          d.payment_mode ||
-          "cash"
-        ).toUpperCase(),
-      ],
+        [
+          "Payment Mode",
+          (
+            dispatch?.payment_mode ||
+            "cash"
+          ).toUpperCase(),
+        ],
 
-      [
-        "Payment Status",
-        (
-          Number(
-            d.final_payable
-          ) || 0
-        ) <= 0
-          ? "PAID"
-          : "PENDING",
+        [
+          "Payment Status",
+          (
+            Number(
+              dispatch?.final_payable
+            ) || 0
+          ) <= 0
+            ? "PAID"
+            : "PENDING",
+        ],
       ],
-    ],
-    y
-  );
+      y
+    );
 
   y =
-    await itemsTable(
+    await drawItemsTable(
       doc,
-      d.items || [],
+      dispatch?.items || [],
       y,
       {
         showPrice: true,
@@ -1455,160 +1374,143 @@ export async function buildDispatchPDF(
       }
     );
 
-  const totalPcs =
-    (
-      d.items || []
-    ).reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        Object.values(
-          item.sizes || {}
-        ).reduce(
-          (
-            a,
-            n
-          ) =>
-            a +
-            Number(
-              n || 0
-            ),
-          0
-        ),
-      0
+  const totalPieces =
+    calculateTotalPieces(
+      dispatch?.items || []
     );
 
   y =
-    totalsBlock(
+    drawTotalsBlock(
       doc,
       [
         [
           "Item Total",
-          money(
-            d.item_total
+          formatRupee(
+            dispatch?.item_total
           ),
           false,
         ],
 
         [
           "Delivery Charges",
-          money(
-            d.delivery_charges
+          formatRupee(
+            dispatch?.delivery_charges
           ),
           false,
         ],
 
         [
           "Grand Total",
-          money(
-            d.grand_total
+          formatRupee(
+            dispatch?.grand_total
           ),
           false,
         ],
 
         [
           "Advance Received",
-          money(
-            d.advance_received
+          formatRupee(
+            dispatch?.advance_received
           ),
           false,
         ],
 
         [
           "Final Payable",
-          money(
-            d.final_payable
+          formatRupee(
+            dispatch?.final_payable
           ),
           true,
         ],
 
         [
           "Total Pieces",
-          String(
-            totalPcs
-          ),
+          String(totalPieces),
           false,
         ],
       ],
       y
     );
 
-  await footer(
+  drawFooter(
     doc,
-    branding,
-    y
+    branding
   );
 
   return doc;
 }
 
 /* =========================================================
-   ESTIMATE
-   ========================================================= */
+   ESTIMATE PDF
+========================================================= */
 
 export async function buildEstimatePDF(
-  est,
+  estimate,
   branding
 ) {
   const doc =
     newReceiptDoc();
 
   let y =
-    await header(
+    await drawHeader(
       doc,
       branding,
       "ESTIMATE",
-      est.estimate_no
+      estimate?.estimate_no
     );
 
-  y = metaBlock(
-    doc,
-    [
+  y =
+    drawMetaBlock(
+      doc,
       [
-        "Date",
-        new Date(
-          est.created_at
-        ).toLocaleString(),
-      ],
+        [
+          "Date",
+          estimate?.created_at
+            ? new Date(
+                estimate.created_at
+              ).toLocaleString()
+            : "—",
+        ],
 
-      [
-        "Estimate No",
-        est.estimate_no,
-      ],
+        [
+          "Estimate No",
+          estimate?.estimate_no ||
+            "—",
+        ],
 
-      [
-        "Customer",
-        est.customer_name ||
-          "Walk-in",
-      ],
+        [
+          "Customer",
+          estimate?.customer_name ||
+            "Walk-in",
+        ],
 
-      [
-        "Phone",
-        est.customer_phone ||
-          "—",
-      ],
+        [
+          "Phone",
+          estimate?.customer_phone ||
+            "—",
+        ],
 
-      [
-        "Status",
-        (
-          est.status || ""
-        ).toUpperCase(),
-      ],
+        [
+          "Status",
+          (
+            estimate?.status ||
+            ""
+          ).toUpperCase() ||
+            "—",
+        ],
 
-      [
-        "Validity",
-        "72 hours",
+        [
+          "Validity",
+          "72 hours",
+        ],
       ],
-    ],
-    y
-  );
+      y
+    );
 
   y =
-    await itemsTable(
+    await drawItemsTable(
       doc,
-      est.items || [],
+      estimate?.items || [],
       y,
       {
         showPrice: true,
@@ -1617,45 +1519,45 @@ export async function buildEstimatePDF(
     );
 
   y =
-    totalsBlock(
+    drawTotalsBlock(
       doc,
       [
         [
           "Item Total",
-          money(
-            est.item_total
+          formatRupee(
+            estimate?.item_total
           ),
           false,
         ],
 
         [
           "Delivery Charges",
-          money(
-            est.delivery_charges
+          formatRupee(
+            estimate?.delivery_charges
           ),
           false,
         ],
 
         [
           "Grand Total",
-          money(
-            est.grand_total
+          formatRupee(
+            estimate?.grand_total
           ),
           false,
         ],
 
         [
           "Advance Received",
-          money(
-            est.advance_received
+          formatRupee(
+            estimate?.advance_received
           ),
           false,
         ],
 
         [
           "Remaining",
-          money(
-            est.remaining
+          formatRupee(
+            estimate?.remaining
           ),
           true,
         ],
@@ -1663,79 +1565,82 @@ export async function buildEstimatePDF(
       y
     );
 
-  await footer(
+  drawFooter(
     doc,
-    branding,
-    y
+    branding
   );
 
   return doc;
 }
 
 /* =========================================================
-   RETURN
-   ========================================================= */
+   RETURN PDF
+========================================================= */
 
 export async function buildReturnPDF(
-  r,
+  returnData,
   branding
 ) {
   const doc =
     newReceiptDoc();
 
   let y =
-    await header(
+    await drawHeader(
       doc,
       branding,
       "RETURN",
-      r.return_no
+      returnData?.return_no
     );
 
-  y = metaBlock(
-    doc,
-    [
+  y =
+    drawMetaBlock(
+      doc,
       [
-        "Date",
-        new Date(
-          r.created_at
-        ).toLocaleString(),
-      ],
+        [
+          "Date",
+          returnData?.created_at
+            ? new Date(
+                returnData.created_at
+              ).toLocaleString()
+            : "—",
+        ],
 
-      [
-        "Return No",
-        r.return_no,
-      ],
+        [
+          "Return No",
+          returnData?.return_no ||
+            "—",
+        ],
 
-      [
-        "Vendor",
-        r.vendor_name ||
-          "—",
-      ],
+        [
+          "Vendor",
+          returnData?.vendor_name ||
+            "—",
+        ],
 
-      [
-        "Reason",
-        r.reason ||
-          "—",
-      ],
+        [
+          "Reason",
+          returnData?.reason ||
+            "—",
+        ],
 
-      [
-        "Created By",
-        r.created_by ||
-          "—",
-      ],
+        [
+          "Created By",
+          returnData?.created_by ||
+            "—",
+        ],
 
-      [
-        "Type",
-        "Vendor Return",
+        [
+          "Type",
+          "Vendor Return",
+        ],
       ],
-    ],
-    y
-  );
+      y
+    );
 
   y =
-    await itemsTable(
+    await drawItemsTable(
       doc,
-      r.items || [],
+      returnData?.items || [],
       y,
       {
         showPrice: true,
@@ -1743,58 +1648,35 @@ export async function buildReturnPDF(
       }
     );
 
-  const totalPcs =
-    (
-      r.items || []
-    ).reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        Object.values(
-          item.sizes || {}
-        ).reduce(
-          (
-            a,
-            n
-          ) =>
-            a +
-            Number(
-              n || 0
-            ),
-          0
-        ),
-      0
+  const totalPieces =
+    calculateTotalPieces(
+      returnData?.items || []
     );
 
   y =
-    totalsBlock(
+    drawTotalsBlock(
       doc,
       [
         [
           "Item Total",
-          money(
-            r.item_total
+          formatRupee(
+            returnData?.item_total
           ),
           true,
         ],
 
         [
           "Pieces Returned",
-          String(
-            totalPcs
-          ),
+          String(totalPieces),
           false,
         ],
       ],
       y
     );
 
-  await footer(
+  drawFooter(
     doc,
-    branding,
-    y
+    branding
   );
 
   return doc;
@@ -1802,39 +1684,58 @@ export async function buildReturnPDF(
 
 /* =========================================================
    DOWNLOAD
-   ========================================================= */
+========================================================= */
 
 export async function downloadPDF(
   doc,
   filename
 ) {
+  if (!doc) {
+    throw new Error(
+      "PDF document is missing."
+    );
+  }
+
   doc.save(
-    filename
+    filename ||
+      "SC-Aura-Receipt.pdf"
   );
 }
 
 /* =========================================================
    SHARE
-   ========================================================= */
+========================================================= */
 
 export async function sharePDF(
   doc,
   filename,
   phone
 ) {
+  if (!doc) {
+    throw new Error(
+      "PDF document is missing."
+    );
+  }
+
+  const finalFilename =
+    filename ||
+    "SC-Aura-Receipt.pdf";
+
   const blob =
     doc.output("blob");
 
   const file =
     new File(
       [blob],
-      filename,
+      finalFilename,
       {
-        type:
-          "application/pdf",
+        type: "application/pdf",
       }
     );
 
+  /*
+   * Native share
+   */
   if (
     navigator.canShare &&
     navigator.canShare({
@@ -1844,41 +1745,40 @@ export async function sharePDF(
     try {
       await navigator.share({
         files: [file],
-        title: filename,
+        title: finalFilename,
       });
 
       return true;
     } catch {
-      // Continue to download/WhatsApp
+      // Continue to WhatsApp fallback.
     }
   }
 
-  doc.save(
-    filename
-  );
+  /*
+   * Download fallback
+   */
+  doc.save(finalFilename);
 
-  const clean =
-    (p || "")
-      .replace(
-        /[^\d+]/g,
-        ""
-      )
-      .replace(
-        /^\+/,
-        ""
-      );
+  /*
+   * WhatsApp fallback
+   */
+  const cleanPhone =
+    (phone || "")
+      .replace(/[^\d+]/g, "")
+      .replace(/^\+/, "");
 
   const text =
     encodeURIComponent(
-      `${filename} — Please find the receipt attached.`
+      `${finalFilename} — Please find the receipt attached.`
     );
 
-  const url = phone
-    ? `https://wa.me/${clean}?text=${text}`
-    : `https://wa.me/?text=${text}`;
+  const whatsappUrl =
+    cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${text}`
+      : `https://wa.me/?text=${text}`;
 
   window.open(
-    url,
+    whatsappUrl,
     "_blank",
     "noopener"
   );
