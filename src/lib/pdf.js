@@ -281,7 +281,8 @@ didDrawCell: (data) => {
       // Ignore invalid image
     }
   }
-},
+  },
+  });
 
   return doc.lastAutoTable.finalY + 5;
 }
