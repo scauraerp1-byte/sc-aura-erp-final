@@ -120,7 +120,12 @@ function metaBlock(doc, entries, y) {
   return y + rows * 6.2 + 3;
 }
 
-async function itemsTable(doc, items, startY, { showPrice = true, showImages = true } = {}) {
+async function itemsTable(
+  doc,
+  items,
+  startY,
+  { showPrice = true, showImages = true } = {}
+) {
   const head = showPrice
     ? [["#", "SCA", "Item / Description", "Qty", "Rate", "Amount"]]
     : [["#", "SCA", "Item / Description", "Qty"]];
@@ -139,9 +144,13 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
       .map(([s, n]) => `${s}:${n}`)
       .join("  ");
 
-    const image = showImages && it.image
-      ? await imgToDataUrl(it.image)
-      : null;
+    const image =
+      showImages && it.image
+        ? await imgToDataUrl(it.image)
+        : null;
+
+    const unitPrice = Number(it.unit_price) || 0;
+    const lineTotal = totalQty * unitPrice;
 
     body.push({
       row: showPrice
@@ -150,8 +159,8 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
             it.sr_number || "",
             `${it.title || ""}${sizeBlock ? `\n${sizeBlock}` : ""}`,
             String(totalQty),
-            (Number(it.unit_price) || 0).toFixed(0),
-            (totalQty * (Number(it.unit_price) || 0)).toFixed(0),
+            formatRupee(unitPrice),
+            formatRupee(lineTotal),
           ]
         : [
             String(i + 1),
@@ -194,10 +203,29 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
       ? {
           0: { cellWidth: 8, halign: "center" },
           1: { cellWidth: 21, fontStyle: "bold" },
-          2: { cellWidth: "auto" },
-          3: { cellWidth: 11, halign: "right" },
-          4: { cellWidth: 16, halign: "right" },
-          5: { cellWidth: 20, halign: "right", fontStyle: "bold" },
+
+          // IMPORTANT:
+          // Image + description are inside SAME Item/Description cell
+          2: {
+            cellWidth: "auto",
+            valign: "middle",
+          },
+
+          3: {
+            cellWidth: 11,
+            halign: "right",
+          },
+
+          4: {
+            cellWidth: 16,
+            halign: "right",
+          },
+
+          5: {
+            cellWidth: 20,
+            halign: "right",
+            fontStyle: "bold",
+          },
         }
       : {
           0: { cellWidth: 8, halign: "center" },
@@ -211,58 +239,112 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
       right: MARGIN,
     },
 
-      didParseCell: (data) => {
-  if (
-    data.section === "body" &&
-    data.column.index === 2
-  ) {
-    const itemData = body[data.row.index];
+    didParseCell: (data) => {
+      if (
+        data.section === "body" &&
+        data.column.index === 2
+      ) {
+        const itemData = body[data.row.index];
 
-    if (itemData?.image) {
-      data.cell.minCellHeight = 24;
-      data.cell.styles.cellPadding = {
-        top: 2.5,
-        right: 2,
-        bottom: 2.5,
-        left: 22,
-      };
-    }
-  }
-},
-    
-didDrawCell: (data) => {
-  if (
-    data.section !== "body" ||
-    data.column.index !== 2
-  ) {
-    return;
-  }
+        if (itemData?.image) {
+          // Make the item row tall enough for image
+          data.cell.minCellHeight = Math.max(
+            data.cell.minCellHeight || 0,
+            24
+          );
+        }
+      }
+    },
 
-  const itemData = body[data.row.index];
+    didDrawCell: (data) => {
+      if (
+        data.section !== "body" ||
+        data.column.index !== 2
+      ) {
+        return;
+      }
 
-  if (!itemData?.image) {
-    return;
-  }
+      const itemData = body[data.row.index];
 
-  const cell = data.cell;
+      if (!itemData?.image) {
+        return;
+      }
 
-  try {
-    const imgSize = 18;
+      try {
+        const cell = data.cell;
 
-    const imgX = cell.x + 2;
-    const imgY = cell.y + 3;
+        const imgSize = Math.min(
+          18,
+          cell.height - 4
+        );
 
-    doc.addImage(
-      itemData.image,
-      imgX,
-      imgY,
-      imgSize,
-      imgSize
-    );
-  } catch (error) {
-    console.warn("Receipt image failed:", error);
-  }
-  },
+        const imgX = cell.x + 2;
+        const imgY =
+          cell.y + (cell.height - imgSize) / 2;
+
+        // Cover the original text area only
+        doc.setFillColor(248, 250, 252);
+
+        doc.rect(
+          cell.x + 1,
+          cell.y + 1,
+          20,
+          cell.height - 2,
+          "F"
+        );
+
+        // Add product image inside Item / Description cell
+        if (itemData.image.startsWith("data:image/png")) {
+          doc.addImage(
+            itemData.image,
+            "PNG",
+            imgX,
+            imgY,
+            imgSize,
+            imgSize
+          );
+        } else {
+          doc.addImage(
+            itemData.image,
+            "JPEG",
+            imgX,
+            imgY,
+            imgSize,
+            imgSize
+          );
+        }
+
+        // Redraw description beside image
+        const text = body[data.row.index].row[2];
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.2);
+        doc.setTextColor(
+          INK[0],
+          INK[1],
+          INK[2]
+        );
+
+        const textX = cell.x + 22;
+
+        const wrapped = doc.splitTextToSize(
+          text,
+          cell.width - 24
+        );
+
+        doc.text(
+          wrapped,
+          textX,
+          cell.y + 5
+        );
+
+      } catch (error) {
+        console.warn(
+          "Receipt item image failed:",
+          error
+        );
+      }
+    },
   });
 
   return doc.lastAutoTable.finalY + 5;
@@ -274,9 +356,17 @@ function totalsBlock(doc, lines, y) {
   const boxX = PAGE_W - MARGIN - boxW;
   const boxH = lines.length * rowH + 8;
 
-  // Box
-  doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
+
+  doc.setFillColor(
+    248,
+    250,
+    252
+  );
 
   doc.roundedRect(
     boxX,
@@ -298,7 +388,9 @@ function totalsBlock(doc, lines, y) {
       bold ? "bold" : "normal"
     );
 
-    doc.setFontSize(bold ? 9 : 8.5);
+    doc.setFontSize(
+      bold ? 9 : 8.5
+    );
 
     doc.setTextColor(
       bold ? INK[0] : MUTE[0],
@@ -322,10 +414,11 @@ function totalsBlock(doc, lines, y) {
       String(value),
       boxX + boxW - 3,
       cy,
-      { align: "right" }
+      {
+        align: "right",
+      }
     );
 
-    // Divider before important final amount
     if (bold && i > 0) {
       doc.setDrawColor(
         LINE[0],
