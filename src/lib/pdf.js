@@ -415,14 +415,6 @@ async function footer(doc, branding, y) {
   );
 }
 
-  // Thank you note
-  doc.setFontSize(7.5);
-  doc.setTextColor(MUTE[0], MUTE[1], MUTE[2]);
-  doc.text(note || "Thank you for your business. Goods once sold cannot be returned without prior approval.", PAGE_W / 2, PAGE_H - 6, { align: "center", maxWidth: PAGE_W - MARGIN * 2 });
-  if (branding?.whatsapp) {
-    doc.text(`WhatsApp: ${branding.whatsapp}`, PAGE_W / 2, PAGE_H - 3, { align: "center" });
-  }
-
 /* ================= Public builders ================= */
 
 export async function buildBookingPDF(b, branding) {
