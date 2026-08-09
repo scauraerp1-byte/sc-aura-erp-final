@@ -219,19 +219,17 @@ async function itemsTable(doc, items, startY, { showPrice = true, showImages = t
     const itemData = body[data.row.index];
 
     if (itemData?.image) {
-      data.cell.minCellHeight = Math.max(
-        data.cell.minCellHeight || 0,
-        24
-      );
-
-      // Leave space for the thumbnail inside Item / Description.
-      data.cell.text = data.cell.text.map(
-        (line) => `          ${line}`
-      );
+      data.cell.minCellHeight = 24;
+      data.cell.styles.cellPadding = {
+        top: 2.5,
+        right: 2,
+        bottom: 2.5,
+        left: 22,
+      };
     }
   }
 },
-
+    
 didDrawCell: (data) => {
   if (
     data.section !== "body" ||
@@ -246,44 +244,25 @@ didDrawCell: (data) => {
     return;
   }
 
+  const cell = data.cell;
+
   try {
-    const cell = data.cell;
     const imgSize = 18;
 
     const imgX = cell.x + 2;
-    const imgY = cell.y + (cell.height - imgSize) / 2;
+    const imgY = cell.y + 3;
 
     doc.addImage(
       itemData.image,
-      "JPEG",
       imgX,
       imgY,
       imgSize,
       imgSize
     );
-  } catch {
-    try {
-      const cell = data.cell;
-      const imgSize = 18;
-
-      const imgX = cell.x + 2;
-      const imgY = cell.y + (cell.height - imgSize) / 2;
-
-      doc.addImage(
-        itemData.image,
-        "PNG",
-        imgX,
-        imgY,
-        imgSize,
-        imgSize
-      );
-    } catch {
-      // Ignore invalid image
-    }
+  } catch (error) {
+    console.warn("Receipt image failed:", error);
   }
-  },
-  });
-
+},
   return doc.lastAutoTable.finalY + 5;
 }
 
