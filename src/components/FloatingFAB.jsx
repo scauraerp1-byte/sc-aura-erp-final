@@ -1,82 +1,94 @@
-import { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Plus, X, Package, CalendarDays, Truck, FileText, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Plus, ClipboardList, Truck, Package, RotateCcw, FileText, X } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
-import { useBodyLock } from "../hooks/useBodyLock";
 
-/**
- * FloatingFAB
- * -----------
- * Global quick-create button. Redesigned so the action labels are ALWAYS
- * visible (previously black-on-black in light theme). Each action row is a
- * proper button with icon + label, on a solid surface, and a proper backdrop.
- */
+const actions = [
+  {
+    label: "Product",
+    icon: Package,
+    path: "/products/new",
+  },
+  {
+    label: "Booking",
+    icon: CalendarDays,
+    path: "/bookings/new",
+  },
+  {
+    label: "Dispatch",
+    icon: Truck,
+    path: "/dispatches/new",
+  },
+  {
+    label: "Estimate",
+    icon: FileText,
+    path: "/estimates/new",
+  },
+  {
+    label: "Return",
+    icon: RotateCcw,
+    path: "/vendor-returns/new",
+  },
+];
+
 export default function FloatingFAB() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
-  useBodyLock(open);
+  const fabRef = useRef(null);
 
-  if (!user) return null;
-  const role = user.role;
-  const canReturn = role === "admin" || role === "super_staff";
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (fabRef.current && !fabRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
 
-  const actions = [
-    { label: "Booking",  icon: ClipboardList, to: "/bookings/new",         testid: "fab-booking"  },
-    { label: "Dispatch", icon: Truck,         to: "/dispatch/new",         testid: "fab-dispatch" },
-    { label: "Estimate", icon: FileText,      to: "/estimates/new",        testid: "fab-estimate" },
-    { label: "Product",  icon: Package,       to: "/products/new",         testid: "fab-product"  },
-    canReturn && { label: "Return", icon: RotateCcw, to: "/vendor-returns/new", testid: "fab-return" },
-  ].filter(Boolean);
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  const handleAction = (path) => {
+    setOpen(false);
+    navigate(path);
+  };
 
   return (
-    <>
+    <div
+      ref={fabRef}
+      className="fixed bottom-6 right-6 z-[100]"
+    >
       {open && (
-        <div
-  aria-hidden="true"
-  data-testid="fab-backdrop"
-  onClick={() => setOpen(false)}
-  className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
-/>
+        <div className="absolute bottom-16 right-0 flex flex-col items-end gap-3 mb-2">
+          {actions.map(({ label, icon: Icon, path }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => handleAction(path)}
+              className="flex items-center gap-3 rounded-full bg-white px-4 py-2.5 shadow-lg border border-gray-200 hover:bg-gray-50 transition-all"
+            >
+              <span className="text-sm font-medium text-gray-700">
+                {label}
+              </span>
+
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+                <Icon size={18} />
+              </span>
+            </button>
+          ))}
+        </div>
       )}
 
-      <div className="fab-anchor fixed z-50 right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-8 flex flex-col items-end gap-2.5 pointer-events-none">
-        {open && (
-          <div className="flex flex-col items-end gap-2 pointer-events-auto">
-            {actions.map((a) => {
-              const Icon = a.icon;
-              return (
-                <button
-                  key={a.label}
-                  type="button"
-                  data-testid={a.testid}
-                  onClick={() => { setOpen(false); navigate(a.to); }}
-                  className="inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg border transition-colors
-                    bg-white text-[var(--sca-primary)] border-[var(--sca-border)] hover:bg-[var(--sca-surface-2)]
-                    dark:bg-[#161b25] dark:text-white dark:border-white/12 dark:hover:bg-[#1f2532]"
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{a.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <button
-  type="button"
-  data-testid="fab-toggle"
- onClick={() => {
-  console.log("FAB", open);
-  setOpen(v => !v);
-}}
-  aria-label={open ? "Close quick actions" : "Open quick actions"}
-  className="pointer-events-auto w-14 h-14 rounded-full bg-[var(--sca-primary)] text-white grid place-items-center shadow-[0_12px_28px_rgba(17,24,39,0.35)] hover:brightness-110 active:scale-95 transition"
->
-          {open ? <X className="w-6 h-6" /> : <Plus className="w-7 h-7 text-white stroke-[3]" />}
-        </button>
-      </div>
-    </>
+      <button
+        type="button"
+        aria-label={open ? "Close quick actions" : "Open quick actions"}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform duration-200 hover:scale-105 active:scale-95"
+      >
+        {open ? <X size={24} /> : <Plus size={24} />}
+      </button>
+    </div>
   );
 }
-import { useEffect } from "react";
