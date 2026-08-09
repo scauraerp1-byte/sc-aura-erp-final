@@ -148,7 +148,6 @@ function CustomerAddModal({ onClose, onCreated }) {
   onChange={(e) => setForm({ ...form, country_code: e.target.value })}
   className="aura-input !w-[72px] flex-shrink-0 px-2"
 >
->
                 {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
               </select>
               <input
