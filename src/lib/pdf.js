@@ -422,7 +422,6 @@ async function footer(doc, branding, y) {
   if (branding?.whatsapp) {
     doc.text(`WhatsApp: ${branding.whatsapp}`, PAGE_W / 2, PAGE_H - 3, { align: "center" });
   }
-}
 
 /* ================= Public builders ================= */
 
