@@ -20,96 +20,123 @@
    ========================================================================== */
 
 :root {
-  /* Semantic tokens - shared across themes */
-  --sca-primary: #111827;
+  --sca-primary: #d4af37;
   --sca-secondary: #374151;
   --sca-success: #16a34a;
   --sca-warning: #f59e0b;
   --sca-error: #dc2626;
-  --sca-brand: #b98a1e;
-  --sca-brand-soft: #f3d97a;
+  --sca-brand: #d4af37;
+  --sca-brand-soft: #f6d77a;
 }
 
-/* Dark theme (default) --------------------------------------------------- */
+/* Dark theme -------------------------------------------------------------- */
 html.theme-dark {
   --sca-bg: #0b0e14;
-  --sca-surface: #11151d;
-  --sca-surface-2: #161b25;
-  --sca-border: rgba(255,255,255,0.08);
-  --sca-border-strong: rgba(255,255,255,0.14);
-  --sca-text: #f3f4f6;
-  --sca-text-soft: rgba(243,244,246,0.72);
-  --sca-text-muted: rgba(243,244,246,0.50);
-  --sca-input-bg: rgba(255,255,255,0.04);
-  --sca-input-border: rgba(255,255,255,0.10);
-  --sca-glass: rgba(255,255,255,0.03);
-  --sca-glass-strong: rgba(255,255,255,0.06);
+  --sca-surface: #151922;
+  --sca-surface-2: #1e2430;
+
+  --sca-border: rgba(255,255,255,0.10);
+  --sca-border-strong: rgba(255,255,255,0.18);
+
+  --sca-text: #f5f5f5;
+  --sca-text-soft: #c7c9cf;
+  --sca-text-muted: #8f949e;
+
+  --sca-input-bg: #11151d;
+  --sca-input-border: rgba(255,255,255,0.16);
+
+  --sca-glass: rgba(255,255,255,0.035);
+  --sca-glass-strong: rgba(255,255,255,0.055);
+
   --sca-overlay: rgba(0,0,0,0.62);
   --sca-shadow: 0 8px 24px rgba(0,0,0,0.35);
 }
 
-/* Light theme ------------------------------------------------------------ */
+/* Light theme ------------------------------------------------------------- */
 html.theme-light {
   --sca-bg: #ffffff;
   --sca-surface: #f8fafc;
   --sca-surface-2: #f1f5f9;
-  --sca-border: #e5e7eb;
-  --sca-border-strong: #d1d5db;
+
+  --sca-border: #e2e5e9;
+  --sca-border-strong: #cbd0d6;
+
   --sca-text: #111827;
   --sca-text-soft: #374151;
   --sca-text-muted: #6b7280;
+
   --sca-input-bg: #ffffff;
-  --sca-input-border: #d1d5db;
+  --sca-input-border: #cbd0d6;
+
   --sca-glass: #ffffff;
   --sca-glass-strong: #ffffff;
-  --sca-overlay: rgba(17,24,39,0.55);
-  --sca-shadow: 0 6px 18px rgba(17,24,39,0.06);
-}
 
+  --sca-overlay: rgba(17,24,39,0.55);
+  --sca-shadow: 0 6px 18px rgba(17,24,39,0.08);
+}
 /* Shadcn compatibility – map to our tokens */
 @layer base {
   html.theme-dark {
     --background: 220 20% 6%;
     --foreground: 210 20% 96%;
+
     --card: 220 18% 10%;
     --card-foreground: 210 20% 96%;
+
     --popover: 220 18% 12%;
     --popover-foreground: 210 20% 96%;
-    --primary: 220 20% 96%;
-    --primary-foreground: 220 20% 10%;
+
+    --primary: 43 65% 52%;
+    --primary-foreground: 0 0% 8%;
+
     --secondary: 220 12% 18%;
     --secondary-foreground: 210 20% 92%;
+
     --muted: 220 12% 16%;
-    --muted-foreground: 220 8% 65%;
-    --accent: 220 12% 20%;
-    --accent-foreground: 210 20% 92%;
+    --muted-foreground: 220 8% 68%;
+
+    --accent: 43 65% 52%;
+    --accent-foreground: 0 0% 8%;
+
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 20% 98%;
+
     --border: 220 12% 20%;
     --input: 220 12% 20%;
-    --ring: 220 20% 65%;
+    --ring: 43 65% 52%;
+
     --radius: 0.75rem;
   }
+
   html.theme-light {
     --background: 0 0% 100%;
     --foreground: 220 22% 15%;
+
     --card: 210 20% 98%;
     --card-foreground: 220 22% 15%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 220 22% 15%;
-    --primary: 220 22% 15%;
+
+    --primary: 43 70% 38%;
     --primary-foreground: 0 0% 100%;
+
     --secondary: 220 14% 96%;
     --secondary-foreground: 220 22% 15%;
+
     --muted: 220 14% 96%;
     --muted-foreground: 220 8% 46%;
-    --accent: 220 14% 94%;
-    --accent-foreground: 220 22% 15%;
+
+    --accent: 43 70% 38%;
+    --accent-foreground: 0 0% 100%;
+
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
+
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 220 22% 40%;
+    --ring: 43 70% 38%;
+
     --radius: 0.75rem;
   }
 }
@@ -152,32 +179,63 @@ html.theme-light .glass-strong {
   box-shadow: 0 12px 40px rgba(17,24,39,0.10);
 }
 
-/* Brand text – used ONLY on wordmark/logo overline, never on amounts ---- */
-.brand-text { color: var(--sca-brand); }
-html.theme-light .brand-text { color: #8a6512; }
+/* Brand / Gold ------------------------------------------------------------ */
+.brand-text {
+  color: var(--sca-brand);
+}
 
-/* Legacy .gold-text -> now becomes primary text (kills gold amounts) ---- */
-.gold-text { color: var(--sca-text); font-weight: 700; -webkit-text-fill-color: currentColor; background: none; }
+html.theme-light .brand-text {
+  color: #9a7415;
+}
 
-/* Amount emphasised – bold neutral, never gold ------------------------- */
-.amount { font-weight: 700; letter-spacing: -0.01em; color: var(--sca-text); }
+.gold-text {
+  color: var(--sca-brand);
+  font-weight: 700;
+  -webkit-text-fill-color: currentColor;
+  background: none;
+}
 
-/* Buttons ---------------------------------------------------------------- */
+.amount {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--sca-text);
+}
+
+/* Buttons ----------------------------------------------------------------- */
 .btn-primary {
   background: var(--sca-primary);
-  color: #ffffff;
+  color: #111111;
   font-weight: 600;
   letter-spacing: 0.02em;
   transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-  box-shadow: 0 6px 18px rgba(17,24,39,0.15);
+  box-shadow: 0 6px 18px rgba(212,175,55,0.18);
 }
-.btn-primary:hover { filter: brightness(1.12); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); filter: brightness(0.96); }
-.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; filter: none; }
-html.theme-light .btn-primary { color: #ffffff; background: #111827; }
 
-/* Backward-compat: keep .btn-gold callable but map to primary */
-.btn-gold { @apply btn-primary; }
+.btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.96);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
+html.theme-light .btn-primary {
+  color: #ffffff;
+  background: #a47b18;
+}
+
+.btn-gold {
+  @apply btn-primary;
+}
 
 /* Inputs ----------------------------------------------------------------- */
 .aura-input {
@@ -273,20 +331,38 @@ html.theme-light aside { background: #ffffff !important; border-color: var(--sca
 html.theme-light header { background: rgba(255,255,255,0.94) !important; border-bottom-color: var(--sca-border) !important; }
 html.theme-light nav.lg\:hidden.fixed { background: rgba(255,255,255,0.96) !important; border-color: var(--sca-border) !important; }
 
-/* Kill remaining gold text and gold accent references in the light theme */
+/* Gold accents - theme safe */
 html.theme-light .text-\[\#ebd281\],
 html.theme-light .text-\[\#ebd281\]\/80,
-html.theme-light .text-\[\#ebd281\]\/90 { color: var(--sca-text) !important; }
+html.theme-light .text-\[\#ebd281\]\/90 {
+  color: #9a7415 !important;
+}
+
+html.theme-dark .text-\[\#ebd281\],
+html.theme-dark .text-\[\#ebd281\]\/80,
+html.theme-dark .text-\[\#ebd281\]\/90 {
+  color: #e4b551 !important;
+}
+
 html.theme-light .bg-\[\#d4af37\]\/10,
 html.theme-light .bg-\[\#d4af37\]\/8,
-html.theme-light .bg-\[\#d4af37\]\/15 { background-color: rgba(17,24,39,0.05) !important; }
-html.theme-light .border-\[\#d4af37\]\/30,
-html.theme-light .border-\[\#d4af37\]\/40 { border-color: var(--sca-border-strong) !important; }
-html.theme-light .from-\[\#ebd281\] { --tw-gradient-from: #111827 !important; }
-html.theme-light .to-\[\#997a15\], html.theme-light .to-\[\#d4af37\] { --tw-gradient-to: #374151 !important; }
+html.theme-light .bg-\[\#d4af37\]\/15 {
+  background-color: rgba(185,138,30,0.10) !important;
+}
 
-/* Dark theme: also tone the gold accents down slightly */
-html.theme-dark .text-\[\#ebd281\] { color: #e4b551; }
+html.theme-light .border-\[\#d4af37\]\/30,
+html.theme-light .border-\[\#d4af37\]\/40 {
+  border-color: rgba(185,138,30,0.35) !important;
+}
+
+html.theme-light .from-\[\#ebd281\] {
+  --tw-gradient-from: #b98a1e !important;
+}
+
+html.theme-light .to-\[\#997a15\],
+html.theme-light .to-\[\#d4af37\] {
+  --tw-gradient-to: #8a6512 !important;
+}
 
 /* Amber pending pill on light theme – ensure readability */
 html.theme-light .text-amber-200,
