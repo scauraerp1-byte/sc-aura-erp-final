@@ -1,31 +1,22 @@
 /**
  * SC AURA ERP
- * Sharing utilities
- *
- * CATALOGUE SHARING:
+ * FINAL CATALOGUE SHARING
  *
  * Mobile:
- *   Product images are prepared BEFORE the user taps share.
- *   On tap -> navigator.share() is called immediately.
+ * - Product image + SCA code prepared before share
+ * - Native Android / iPhone share sheet
  *
  * Desktop:
- *   Custom WhatsApp / Other chooser can be used.
+ * - WhatsApp / Other chooser
  *
- * Shared catalogue image:
- *   PRODUCT IMAGE
- *   SCA-00017
- *
- * SCA code is LEFT aligned.
- *
- * Catalogue sharing NEVER adds:
- *   - catalogue URL
- *   - View catalogue
- *   - public catalogue link
+ * Catalogue share:
+ * - Actual product image
+ * - SCA code below image
+ * - SCA code left aligned
+ * - Product details
+ * - NO catalogue URL
+ * - NO "View Catalogue"
  */
-
-/* =========================================================
-   BASIC HELPERS
-========================================================= */
 
 const cleanPhone = (p) =>
   String(p || "")
@@ -33,7 +24,7 @@ const cleanPhone = (p) =>
     .replace(/^\+/, "");
 
 /* =========================================================
-   NORMAL WHATSAPP TEXT SHARE
+   WHATSAPP TEXT
 ========================================================= */
 
 export function whatsappUrl(phone, text) {
@@ -48,14 +39,8 @@ export function whatsappUrl(phone, text) {
   )}`;
 }
 
-export function shareWhatsApp({
-  phone,
-  text,
-}) {
-  const url = whatsappUrl(
-    phone,
-    text
-  );
+export function shareWhatsApp({ phone, text }) {
+  const url = whatsappUrl(phone, text);
 
   window.open(
     url,
@@ -66,8 +51,6 @@ export function shareWhatsApp({
 
 /* =========================================================
    NORMAL PAGE SHARE
- *
- * Kept for other existing functionality.
 ========================================================= */
 
 export async function sharePage({
@@ -89,24 +72,41 @@ export async function sharePage({
 
       return true;
     } catch {
-      // cancelled / failed
+      // cancelled
     }
   }
 
-  const finalText = url
-    ? `${text || ""}\n${url}`
-    : text || "";
-
   shareWhatsApp({
     phone,
-    text: finalText,
+    text: url
+      ? `${text || ""}\n${url}`
+      : text || "",
   });
 
   return false;
 }
 
 /* =========================================================
-   IMAGE FIELD HELPERS
+   DEVICE
+========================================================= */
+
+export function isMobileDevice() {
+  if (
+    typeof navigator === "undefined"
+  ) {
+    return false;
+  }
+
+  const ua =
+    navigator.userAgent || "";
+
+  return /android|iphone|ipad|ipod|mobile/i.test(
+    ua
+  );
+}
+
+/* =========================================================
+   PRODUCT IMAGES
 ========================================================= */
 
 export function getProductImages(product) {
@@ -117,7 +117,7 @@ export function getProductImages(product) {
     return product.images.filter(Boolean);
   }
 
-  const single =
+  const image =
     product?.image ||
     product?.image_url ||
     product?.imageUrl ||
@@ -128,17 +128,13 @@ export function getProductImages(product) {
     product?.thumbnail ||
     product?.thumbnail_url;
 
-  return single
-    ? [single]
+  return image
+    ? [image]
     : [];
 }
 
 /* =========================================================
    SCA CODE
- *
- * 0017       -> SCA-0017
- * SCA-0017  -> SCA-0017
- * SCA-00017 -> SCA-00017
 ========================================================= */
 
 export function getScaCode(product) {
@@ -159,7 +155,8 @@ export function getScaCode(product) {
     return raw.toUpperCase();
   }
 
-  const match = raw.match(/(\d+)$/);
+  const match =
+    raw.match(/(\d+)$/);
 
   if (match) {
     return `SCA-${match[1]}`;
@@ -169,271 +166,357 @@ export function getScaCode(product) {
 }
 
 /* =========================================================
-   LOAD IMAGE SOURCE
+   IMAGE URL NORMALIZER
 ========================================================= */
 
-async function loadImageSource(source) {
-  if (!source) {
+function normalizeImageUrl(source) {
+  if (
+    typeof source !== "string"
+  ) {
+    return source;
+  }
+
+  if (
+    source.startsWith("data:") ||
+    source.startsWith("blob:")
+  ) {
+    return source;
+  }
+
+  /*
+   * Already absolute URL.
+   */
+  if (
+    source.startsWith("http://") ||
+    source.startsWith("https://")
+  ) {
+    return source;
+  }
+
+  /*
+   * Relative URL.
+   */
+  try {
+    return new URL(
+      source,
+      window.location.origin
+    ).href;
+  } catch {
+    return source;
+  }
+}
+
+/* =========================================================
+   FETCH IMAGE WITH HARD TIMEOUT
+========================================================= */
+
+async function fetchImageBlob(source) {
+  const url =
+    normalizeImageUrl(
+      source
+    );
+
+  if (!url) {
     throw new Error(
       "Product image is missing."
     );
   }
 
+  /*
+   * Data URL
+   */
   if (
-    typeof source === "string" &&
-    source.startsWith("data:image/")
+    typeof url === "string" &&
+    url.startsWith("data:image/")
   ) {
-    return source;
+    const response =
+      await fetch(url);
+
+    return response.blob();
   }
 
+  /*
+   * Existing blob URL
+   */
   if (
-    typeof source === "string" &&
-    source.startsWith("blob:")
+    typeof url === "string" &&
+    url.startsWith("blob:")
   ) {
-    return source;
+    const response =
+      await fetch(url);
+
+    return response.blob();
   }
 
-  const response = await fetch(source);
+  const controller =
+    new AbortController();
 
-  if (!response.ok) {
-    throw new Error(
-      `Unable to load product image (${response.status}).`
-    );
-  }
-
-  const blob =
-    await response.blob();
-
-  return URL.createObjectURL(
-    blob
-  );
-}
-
-/* =========================================================
-   LOAD HTML IMAGE
-========================================================= */
-
-function loadHtmlImage(source) {
-  return new Promise(
-    (resolve, reject) => {
-      const img =
-        new Image();
-
-      img.crossOrigin =
-        "anonymous";
-
-      img.onload = () =>
-        resolve(img);
-
-      img.onerror = () =>
-        reject(
-          new Error(
-            "Unable to decode product image."
-          )
-        );
-
-      img.src = source;
-    }
-  );
-}
-
-/* =========================================================
-   CREATE CATALOGUE IMAGE
- *
- * Image
- *   ↓
- * White strip
- *   ↓
- * SCA-00017 LEFT
-========================================================= */
-
-export async function createCatalogueImage(
-  imageSource,
-  scaCode
-) {
-  const source =
-    await loadImageSource(
-      imageSource
-    );
-
-  let generatedObjectUrl =
-    null;
-
-  if (
-    typeof source === "string" &&
-    source.startsWith("blob:")
-  ) {
-    generatedObjectUrl =
-      source;
-  }
+  const timeout =
+    setTimeout(() => {
+      controller.abort();
+    }, 8000);
 
   try {
-    const img =
-      await loadHtmlImage(
-        source
-      );
+    const response =
+      await fetch(url, {
+        signal:
+          controller.signal,
+        mode: "cors",
+        credentials: "omit",
+        cache: "force-cache",
+      });
 
-    const MAX_WIDTH = 1400;
-
-    const originalWidth =
-      img.naturalWidth ||
-      img.width ||
-      1000;
-
-    const originalHeight =
-      img.naturalHeight ||
-      img.height ||
-      1000;
-
-    const scale =
-      Math.min(
-        1,
-        MAX_WIDTH /
-          originalWidth
-      );
-
-    const width =
-      Math.max(
-        1,
-        Math.round(
-          originalWidth *
-            scale
-        )
-      );
-
-    const imageHeight =
-      Math.max(
-        1,
-        Math.round(
-          originalHeight *
-            scale
-        )
-      );
-
-    const stripHeight =
-      Math.max(
-        58,
-        Math.round(
-          width * 0.045
-        )
-      );
-
-    const canvas =
-      document.createElement(
-        "canvas"
-      );
-
-    canvas.width =
-      width;
-
-    canvas.height =
-      imageHeight +
-      stripHeight;
-
-    const ctx =
-      canvas.getContext(
-        "2d"
-      );
-
-    if (!ctx) {
+    if (!response.ok) {
       throw new Error(
-        "Canvas is not supported."
+        `Image request failed (${response.status}).`
       );
     }
 
-    /* White background */
-
-    ctx.fillStyle =
-      "#ffffff";
-
-    ctx.fillRect(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    /* Product image */
-
-    ctx.drawImage(
-      img,
-      0,
-      0,
-      width,
-      imageHeight
-    );
-
-    /* Code strip */
-
-    ctx.fillStyle =
-      "#ffffff";
-
-    ctx.fillRect(
-      0,
-      imageHeight,
-      width,
-      stripHeight
-    );
-
-    /* SCA CODE - LEFT */
-
-    ctx.fillStyle =
-      "#111111";
-
-    ctx.font =
-      `700 ${Math.max(
-        26,
-        Math.round(
-          width * 0.032
-        )
-      )}px Arial, sans-serif`;
-
-    ctx.textAlign =
-      "left";
-
-    ctx.textBaseline =
-      "middle";
-
-    ctx.fillText(
-      scaCode,
-      Math.round(
-        width * 0.025
-      ),
-      imageHeight +
-        stripHeight / 2
-    );
-
     const blob =
-      await new Promise(
-        (resolve) => {
-          canvas.toBlob(
-            resolve,
-            "image/jpeg",
-            0.94
-          );
-        }
-      );
+      await response.blob();
 
-    if (!blob) {
+    if (!blob.size) {
       throw new Error(
-        "Unable to create share image."
+        "Image returned empty data."
       );
     }
 
     return blob;
-  } finally {
+  } catch (error) {
     if (
-      generatedObjectUrl
+      error?.name ===
+      "AbortError"
     ) {
-      URL.revokeObjectURL(
-        generatedObjectUrl
+      throw new Error(
+        "Image loading timed out."
       );
     }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 /* =========================================================
-   PRODUCT DETAILS
+   IMAGE ELEMENT
+========================================================= */
+
+function loadImageFromBlob(blob) {
+  return new Promise(
+    (resolve, reject) => {
+      const objectUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      const img =
+        new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
+        resolve(img);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
+        reject(
+          new Error(
+            "Unable to read product image."
+          )
+        );
+      };
+
+      img.src =
+        objectUrl;
+    }
+  );
+}
+
+/* =========================================================
+   CREATE FINAL SHARE IMAGE
+========================================================= */
+
+async function createCatalogueImage(
+  imageSource,
+  scaCode
+) {
+  const imageBlob =
+    await fetchImageBlob(
+      imageSource
+    );
+
+  const img =
+    await loadImageFromBlob(
+      imageBlob
+    );
+
+  const MAX_WIDTH =
+    1400;
+
+  const originalWidth =
+    img.naturalWidth ||
+    img.width ||
+    1000;
+
+  const originalHeight =
+    img.naturalHeight ||
+    img.height ||
+    1000;
+
+  const scale =
+    Math.min(
+      1,
+      MAX_WIDTH /
+        originalWidth
+    );
+
+  const width =
+    Math.max(
+      1,
+      Math.round(
+        originalWidth *
+          scale
+      )
+    );
+
+  const imageHeight =
+    Math.max(
+      1,
+      Math.round(
+        originalHeight *
+          scale
+      )
+    );
+
+  /*
+   * Small clean code strip.
+   */
+  const stripHeight =
+    Math.max(
+      60,
+      Math.round(
+        width * 0.055
+      )
+    );
+
+  const canvas =
+    document.createElement(
+      "canvas"
+    );
+
+  canvas.width =
+    width;
+
+  canvas.height =
+    imageHeight +
+    stripHeight;
+
+  const ctx =
+    canvas.getContext(
+      "2d"
+    );
+
+  if (!ctx) {
+    throw new Error(
+      "Canvas is not supported."
+    );
+  }
+
+  /*
+   * White background.
+   */
+  ctx.fillStyle =
+    "#ffffff";
+
+  ctx.fillRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  /*
+   * Product image.
+   */
+  ctx.drawImage(
+    img,
+    0,
+    0,
+    width,
+    imageHeight
+  );
+
+  /*
+   * Code strip.
+   */
+  ctx.fillStyle =
+    "#ffffff";
+
+  ctx.fillRect(
+    0,
+    imageHeight,
+    width,
+    stripHeight
+  );
+
+  /*
+   * SCA code.
+   */
+  ctx.fillStyle =
+    "#111111";
+
+  ctx.font =
+    `700 ${Math.max(
+      26,
+      Math.round(
+        width * 0.035
+      )
+    )}px Arial, sans-serif`;
+
+  ctx.textAlign =
+    "left";
+
+  ctx.textBaseline =
+    "middle";
+
+  ctx.fillText(
+    scaCode,
+    Math.round(
+      width * 0.025
+    ),
+    imageHeight +
+      stripHeight / 2
+  );
+
+  const output =
+    await new Promise(
+      (resolve) => {
+        canvas.toBlob(
+          resolve,
+          "image/jpeg",
+          0.94
+        );
+      }
+    );
+
+  if (!output) {
+    throw new Error(
+      "Unable to create share image."
+    );
+  }
+
+  return output;
+}
+
+/* =========================================================
+   PRODUCT TEXT
 ========================================================= */
 
 export function getProductDetails(product) {
@@ -450,11 +533,6 @@ export function getProductDetails(product) {
       product?.category || ""
     ).trim();
 
-  const price =
-    Number(
-      product?.price || 0
-    );
-
   const sizes =
     Array.isArray(
       product?.available_sizes
@@ -466,6 +544,11 @@ export function getProductDetails(product) {
           product?.size_preset ||
             ""
         );
+
+  const price =
+    Number(
+      product?.price || 0
+    );
 
   const description =
     String(
@@ -514,19 +597,18 @@ export function getProductDetails(product) {
     );
   }
 
-  return lines.join("\n");
+  return lines.join(
+    "\n"
+  );
 }
 
 /* =========================================================
-   PREPARE CATALOGUE SHARE
+   PREPARE CATALOGUE
  *
- * IMPORTANT:
+ * Called while page/card is idle.
  *
- * This function is called BEFORE
- * the user taps the share button.
- *
- * This solves mobile user-activation
- * problems.
+ * NEVER called after the share
+ * button's native share activation.
 ========================================================= */
 
 export async function prepareCatalogueShare({
@@ -543,9 +625,7 @@ export async function prepareCatalogueShare({
       product
     );
 
-  if (
-    images.length === 0
-  ) {
+  if (!images.length) {
     throw new Error(
       "No product image found."
     );
@@ -573,7 +653,7 @@ export async function prepareCatalogueShare({
         sca
       );
 
-    const file =
+    files.push(
       new File(
         [blob],
         `${sca}-${i + 1}.jpg`,
@@ -581,9 +661,8 @@ export async function prepareCatalogueShare({
           type:
             "image/jpeg",
         }
-      );
-
-    files.push(file);
+      )
+    );
   }
 
   return {
@@ -600,27 +679,16 @@ export async function prepareCatalogueShare({
 }
 
 /* =========================================================
-   NATIVE FILE SHARE
- *
- * IMPORTANT:
- * No async preparation happens here.
- *
- * Files are already ready.
- *
- * This function should be called
- * DIRECTLY from the click event.
+   NATIVE SHARE
 ========================================================= */
 
 export async function sharePreparedCatalogue({
   prepared,
 }) {
   if (
-    !prepared ||
-    !prepared.files?.length
+    !prepared?.files?.length
   ) {
-    throw new Error(
-      "Catalogue is still preparing."
-    );
+    return false;
   }
 
   if (
@@ -632,14 +700,35 @@ export async function sharePreparedCatalogue({
     return false;
   }
 
+  /*
+   * File support check.
+   */
+  if (
+    typeof navigator.canShare ===
+      "function"
+  ) {
+    const supported =
+      navigator.canShare({
+        files:
+          prepared.files,
+      });
+
+    if (!supported) {
+      return false;
+    }
+  }
+
   try {
+    /*
+     * IMPORTANT:
+     * This is the first async operation
+     * after the user's tap.
+     */
     await navigator.share({
       title:
         prepared.title,
-
       text:
         prepared.details,
-
       files:
         prepared.files,
     });
@@ -654,28 +743,11 @@ export async function sharePreparedCatalogue({
     }
 
     console.error(
-      "Native share failed:",
+      "Native catalogue share failed:",
       error
     );
 
-    /*
-     * Some browsers may reject
-     * file sharing but still support
-     * normal native text sharing.
-     */
-    try {
-      await navigator.share({
-        title:
-          prepared.title,
-
-        text:
-          prepared.details,
-      });
-
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -683,13 +755,13 @@ export async function sharePreparedCatalogue({
    DOWNLOAD
 ========================================================= */
 
-function downloadBlob(
-  blob,
+function downloadFile(
+  file,
   filename
 ) {
   const url =
     URL.createObjectURL(
-      blob
+      file
     );
 
   const a =
@@ -711,18 +783,15 @@ function downloadBlob(
 
   a.remove();
 
-  setTimeout(
-    () => {
-      URL.revokeObjectURL(
-        url
-      );
-    },
-    1000
-  );
+  setTimeout(() => {
+    URL.revokeObjectURL(
+      url
+    );
+  }, 1000);
 }
 
 /* =========================================================
-   DESKTOP CATALOGUE SHARE
+   DESKTOP SHARE
 ========================================================= */
 
 export async function sharePreparedCatalogueDesktop({
@@ -731,18 +800,17 @@ export async function sharePreparedCatalogueDesktop({
   phone,
 }) {
   if (
-    !prepared ||
-    !prepared.files?.length
+    !prepared?.files?.length
   ) {
-    throw new Error(
-      "Catalogue is still preparing."
-    );
+    return false;
   }
 
-  /* Other */
-
+  /*
+   * OTHER
+   */
   if (
-    destination === "other"
+    destination ===
+    "other"
   ) {
     if (
       typeof navigator !==
@@ -751,18 +819,25 @@ export async function sharePreparedCatalogueDesktop({
         "function"
     ) {
       try {
-        await navigator.share({
-          title:
-            prepared.title,
+        if (
+          typeof navigator.canShare !==
+            "function" ||
+          navigator.canShare({
+            files:
+              prepared.files,
+          })
+        ) {
+          await navigator.share({
+            title:
+              prepared.title,
+            text:
+              prepared.details,
+            files:
+              prepared.files,
+          });
 
-          text:
-            prepared.details,
-
-          files:
-            prepared.files,
-        });
-
-        return true;
+          return true;
+        }
       } catch (error) {
         if (
           error?.name ===
@@ -774,11 +849,8 @@ export async function sharePreparedCatalogueDesktop({
     }
 
     prepared.files.forEach(
-      (
-        file,
-        index
-      ) => {
-        downloadBlob(
+      (file, index) => {
+        downloadFile(
           file,
           `${prepared.sca}-${index + 1}.jpg`
         );
@@ -788,37 +860,29 @@ export async function sharePreparedCatalogueDesktop({
     return true;
   }
 
-  /* WhatsApp */
-
+  /*
+   * WHATSAPP DESKTOP
+   */
   if (
     destination ===
     "whatsapp"
   ) {
     prepared.files.forEach(
-      (
-        file,
-        index
-      ) => {
-        downloadBlob(
+      (file, index) => {
+        downloadFile(
           file,
           `${prepared.sca}-${index + 1}.jpg`
         );
       }
     );
 
-    await new Promise(
-      (resolve) =>
-        setTimeout(
-          resolve,
-          400
-        )
-    );
-
-    shareWhatsApp({
-      phone,
-      text:
-        prepared.details,
-    });
+    setTimeout(() => {
+      shareWhatsApp({
+        phone,
+        text:
+          prepared.details,
+      });
+    }, 500);
 
     return true;
   }
@@ -828,9 +892,6 @@ export async function sharePreparedCatalogueDesktop({
 
 /* =========================================================
    BACKWARD COMPATIBILITY
- *
- * Existing callers can still use
- * shareCatalogue().
 ========================================================= */
 
 export async function shareCatalogue({
@@ -842,8 +903,7 @@ export async function shareCatalogue({
 }) {
   const actualProduct =
     product ||
-    products?.[0] ||
-    null;
+    products?.[0];
 
   if (!actualProduct) {
     throw new Error(
@@ -860,19 +920,6 @@ export async function shareCatalogue({
 
   if (
     destination ===
-    "whatsapp"
-  ) {
-    return sharePreparedCatalogueDesktop({
-      prepared:
-        finalPrepared,
-      destination:
-        "whatsapp",
-      phone,
-    });
-  }
-
-  if (
-    destination ===
     "mobile"
   ) {
     return sharePreparedCatalogue({
@@ -884,8 +931,7 @@ export async function shareCatalogue({
   return sharePreparedCatalogueDesktop({
     prepared:
       finalPrepared,
-    destination:
-      "other",
+    destination,
     phone,
   });
 }
@@ -893,9 +939,8 @@ export async function shareCatalogue({
 /* =========================================================
    PUBLIC URL HELPERS
  *
- * Kept for other ERP features.
- *
- * NOT USED FOR CATALOGUE SHARING.
+ * Kept for other ERP functionality.
+ * NOT USED in catalogue image sharing.
 ========================================================= */
 
 export function publicCatalogueUrl(
