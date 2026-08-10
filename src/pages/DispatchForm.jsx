@@ -19,6 +19,8 @@ export default function DispatchForm() {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
+  const [customerPicker, setCustomerPicker] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
   const [dispatchTo, setDispatchTo] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
@@ -30,6 +32,7 @@ export default function DispatchForm() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const dq = useDebounced(pickerQuery, 180);
+  const customerDQ = useDebounced(customerQuery, 180);
 
   const [paymentMode, setPaymentMode] = useState("cash");
   const [deliveryCharges, setDeliveryCharges] = useState(0);
@@ -154,6 +157,18 @@ export default function DispatchForm() {
     return products.filter((p) => (p.title || "").toLowerCase().includes(q) || (p.sr_number || "").toLowerCase().includes(q));
   }, [products, dq]);
 
+  const filteredCustomers = useMemo(() => {
+    const q = customerDQ.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter((c) =>
+      [c.name, c.shop_name, c.phone, c.country_code]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    );
+  }, [customers, customerDQ]);
+
+  const selectedCustomer = customers.find((c) => c.id === customerId);
+
   return (
     <div className="max-w-3xl mx-auto space-y-4 pb-8">
       <SectionTitle overline="Operations" title={estimateId ? "Confirm Estimate → Dispatch" : bookingId ? "Dispatch from Booking" : "New Dispatch"} />
@@ -223,10 +238,42 @@ export default function DispatchForm() {
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block sm:col-span-2">
             <span className="text-xs text-white/70 mb-1.5 inline-block">Linked customer (optional)</span>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="aura-input">
-              <option value="">— Direct sale —</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.shop_name}</option>)}
-            </select>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerQuery("");
+                  setCustomerPicker(true);
+                }}
+                className="aura-input flex-1 text-left flex items-center justify-between gap-3"
+              >
+                <span className={selectedCustomer ? "" : "text-white/45"}>
+                  {selectedCustomer
+                    ? `${selectedCustomer.name}${selectedCustomer.shop_name ? ` · ${selectedCustomer.shop_name}` : ""}`
+                    : "— Direct sale —"}
+                </span>
+                <Search className="w-4 h-4 flex-shrink-0 opacity-60" />
+              </button>
+
+              {customerId && (
+                <button
+                  type="button"
+                  onClick={() => setCustomerId("")}
+                  className="rounded-xl glass px-3 border border-white/10 hover:bg-white/10"
+                  aria-label="Clear customer"
+                  title="Clear customer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {selectedCustomer && (
+              <div className="text-[11px] text-white/45 mt-1">
+                {selectedCustomer.shop_name || "Customer"} · {selectedCustomer.phone || "No phone"}
+              </div>
+            )}
           </label>
           <label className="block">
             <span className="text-xs text-white/70 mb-1.5 inline-block">Dispatch to *</span>
@@ -289,6 +336,23 @@ export default function DispatchForm() {
       </div>
 
       <QRScanner open={scanOpen} onClose={() => setScanOpen(false)} onScan={(code) => { setScanOpen(false); loadBySr(code); }} />
+
+      {customerPicker && (
+        <CustomerPickerModal
+          customers={filteredCustomers}
+          query={customerQuery}
+          onQuery={setCustomerQuery}
+          onPick={(c) => {
+            setCustomerId(c.id);
+            setCustomerPicker(false);
+            setCustomerQuery("");
+          }}
+          onClose={() => {
+            setCustomerPicker(false);
+            setCustomerQuery("");
+          }}
+        />
+      )}
 
       {pickerOpen && (
         <ProductPickerModal
@@ -388,6 +452,75 @@ function ProductPickerModal({ products, query, onQuery, onPick, onClose }) {
               <div className="text-right flex-shrink-0">
                 <div className="font-display tabular-nums text-sm">₹{p.price}</div>
                 <div className="text-[10px] text-[var(--sca-text-muted)] dark:text-white/55 mt-0.5">{p.size_preset}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomerPickerModal({ customers, query, onQuery, onPick, onClose }) {
+  useBodyLock(true);
+  useEscapeClose(onClose, true);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/55 backdrop-blur-sm grid place-items-center modal-viewport p-3"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="modal-shell w-full max-w-xl rounded-2xl border shadow-2xl fade-up
+        bg-white border-[var(--sca-border)] text-[var(--sca-text)]
+        dark:bg-[#11151d] dark:border-white/12 dark:text-white"
+      >
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--sca-border)] dark:border-white/10">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.24em] text-[var(--sca-text-muted)] dark:text-white/45">People</div>
+            <h3 className="font-display text-lg">Select Customer</h3>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-[var(--sca-border)] dark:border-white/10">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-60" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+              placeholder="Search name, shop or phone…"
+              className="aura-input pl-10"
+            />
+          </div>
+        </div>
+
+        <div className="modal-body p-3 space-y-2">
+          {customers.length === 0 && (
+            <div className="text-center text-sm text-[var(--sca-text-muted)] dark:text-white/55 py-8">
+              {query ? `No customers match “${query}”` : "No customers found."}
+            </div>
+          )}
+
+          {customers.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onPick(c)}
+              className="w-full text-left rounded-xl p-3 border border-[var(--sca-border)] dark:border-white/10 bg-black/[0.02] dark:bg-white/5 hover:bg-black/[0.05] dark:hover:bg-white/10 transition"
+            >
+              <div className="font-medium truncate">{c.name}</div>
+              {c.shop_name && (
+                <div className="text-xs text-[var(--sca-text-muted)] dark:text-white/50 truncate mt-0.5">
+                  {c.shop_name}
+                </div>
+              )}
+              <div className="text-xs text-[var(--sca-text-soft)] dark:text-white/65 mt-1">
+                {c.country_code || ""} {c.phone || "No phone"}
               </div>
             </button>
           ))}
