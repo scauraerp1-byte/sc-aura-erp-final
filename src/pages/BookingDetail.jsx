@@ -5,7 +5,7 @@ import { useBranding } from "../contexts/BrandingContext";
 import { GlassCard, Pill, SectionTitle } from "../components/Primitives";
 import { ArrowLeft, Truck, Share2, MessageCircle, Pencil, Download, Loader2 } from "lucide-react";
 import StatusTracker, { StatusBadge } from "../components/StatusTracker";
-import { shareWhatsApp, publicBookingUrl, formatRupee } from "../lib/share";
+import { shareWhatsApp, formatRupee } from "../lib/share";
 import { buildBookingPDF, downloadPDF, sharePDF } from "../lib/pdf";
 
 export default function BookingDetail() {
@@ -46,7 +46,7 @@ export default function BookingDetail() {
     } finally { setBusy(false); }
   };
   const whatsappShort = () => {
-    const text = `*${branding?.company_name || "SC Aura Kurtis"}* — Booking ${b.booking_no}\nTotal: ${formatRupee(b.item_total)}\nAdvance: ${formatRupee(b.advance_received)}\nRemaining: ${formatRupee(b.remaining)}\nPieces: ${totalPieces}\n\nView → ${publicBookingUrl(b.id)}`;
+    const text = `*${branding?.company_name || "SC Aura Kurtis"}* — Booking ${b.booking_no}\nTotal: ${formatRupee(b.item_total)}\nAdvance: ${formatRupee(b.advance_received)}\nRemaining: ${formatRupee(b.remaining)}\nPieces: ${totalPieces}`;
     shareWhatsApp({ phone, text });
   };
   const goToDispatch = () => navigate("/dispatch/new", { state: { booking: b } });
