@@ -1,64 +1,24 @@
-/**
- * SC AURA KURTIS
- * PROFESSIONAL ERP DOCUMENT PDF
- *
- * Documents:
- * - Booking
- * - Dispatch
- * - Estimate
- * - Return
- *
- * DESIGN:
- * - A5 LANDSCAPE
- * - Professional business receipt
- * - Dedicated product image column
- * - Dedicated description column
- * - Separate SCA column
- * - Clean customer / document information cards
- * - Rs. currency text
- * - No ₹ glyph
- * - No QR
- * - No signature
- * - No unnecessary footer text
- */
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 /* =========================================================
-   PAGE
+   SC AURA KURTIS - FINAL PDF
+   A5 LANDSCAPE / SINGLE PAGE RECEIPT
 ========================================================= */
 
 const PAGE_W = 210;
 const PAGE_H = 148;
 
-const MARGIN = 10;
-const CONTENT_W =
-  PAGE_W - MARGIN * 2;
-
-const FOOTER_Y = PAGE_H - 8;
-const CONTENT_BOTTOM =
-  FOOTER_Y - 5;
-
-/* =========================================================
-   COLORS
-========================================================= */
+const MARGIN = 9;
+const CONTENT_W = PAGE_W - MARGIN * 2;
 
 const NAVY = [18, 27, 45];
-const NAVY_2 = [31, 43, 67];
-
-const TEXT = [25, 32, 45];
-const MUTED = [102, 112, 128];
-
-const BORDER = [222, 226, 232];
+const TEXT = [30, 37, 50];
+const MUTED = [100, 110, 125];
+const BORDER = [220, 224, 230];
 const LIGHT = [247, 248, 250];
 const WHITE = [255, 255, 255];
-
-const ACCENT = [190, 154, 65];
-
-/* =========================================================
-   BACKEND
-========================================================= */
+const GOLD = [190, 154, 65];
 
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
@@ -69,72 +29,22 @@ const BACKEND_URL =
    BASIC HELPERS
 ========================================================= */
 
-function setTextColor(
-  doc,
-  color
-) {
-  doc.setTextColor(
-    color[0],
-    color[1],
-    color[2]
-  );
-}
-
-function setDrawColor(
-  doc,
-  color
-) {
-  doc.setDrawColor(
-    color[0],
-    color[1],
-    color[2]
-  );
-}
-
-function setFillColor(
-  doc,
-  color
-) {
-  doc.setFillColor(
-    color[0],
-    color[1],
-    color[2]
-  );
-}
-
-function safeNumber(
-  value,
-  fallback = 0
-) {
-  if (
-    typeof value ===
-    "number"
-  ) {
-    return Number.isFinite(
-      value
-    )
+function num(value, fallback = 0) {
+  if (typeof value === "number") {
+    return Number.isFinite(value)
       ? value
       : fallback;
   }
 
-  const cleaned =
-    String(
-      value ?? ""
-    )
-      .replace(/₹/g, "")
-      .replace(
-        /Rs\.?/gi,
-        ""
-      )
-      .replace(/,/g, "")
-      .trim();
+  const cleaned = String(value ?? "")
+    .replace(/₹/g, "")
+    .replace(/Rs\.?/gi, "")
+    .replace(/,/g, "")
+    .trim();
 
-  if (!cleaned) {
-    return fallback;
-  }
+  if (!cleaned) return fallback;
 
-  const n =
-    Number(cleaned);
+  const n = Number(cleaned);
 
   return Number.isFinite(n)
     ? n
@@ -144,242 +54,225 @@ function safeNumber(
 function money(value) {
   return (
     "Rs. " +
-    new Intl.NumberFormat(
-      "en-IN",
-      {
-        maximumFractionDigits: 0,
-      }
-    ).format(
-      safeNumber(
-        value,
-        0
-      )
-    )
+    new Intl.NumberFormat("en-IN", {
+      maximumFractionDigits: 0,
+    }).format(num(value))
   );
 }
 
-function dateTime(value) {
-  if (!value) {
-    return "—";
-  }
+function formatDate(value) {
+  if (!value) return "—";
 
   try {
-    return new Date(
-      value
-    ).toLocaleString(
-      "en-IN",
-      {
-        dateStyle:
-          "medium",
-        timeStyle:
-          "short",
-      }
-    );
+    return new Date(value).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   } catch {
     return String(value);
   }
 }
 
-/* =========================================================
-   PRODUCT HELPERS
-========================================================= */
-
-function getTotalQuantity(
-  item
-) {
+function totalQty(item) {
   if (
     item?.sizes &&
-    typeof item.sizes ===
-      "object"
+    typeof item.sizes === "object"
   ) {
-    return Object.values(
-      item.sizes
-    ).reduce(
-      (
-        total,
-        quantity
-      ) =>
-        total +
-        safeNumber(
-          quantity,
-          0
-        ),
+    return Object.values(item.sizes).reduce(
+      (sum, value) =>
+        sum + num(value, 0),
       0
     );
   }
 
-  return safeNumber(
-    item?.quantity,
-    0
+  return num(
+    item?.quantity ??
+      item?.qty ??
+      0
   );
 }
 
-function getSizeText(
-  item
-) {
+function sizeText(item) {
   if (
     !item?.sizes ||
-    typeof item.sizes !==
-      "object"
+    typeof item.sizes !== "object"
   ) {
     return "";
   }
 
-  return Object.entries(
-    item.sizes
-  )
+  return Object.entries(item.sizes)
     .filter(
-      ([, quantity]) =>
-        safeNumber(
-          quantity,
-          0
-        ) > 0
+      ([, value]) =>
+        num(value, 0) > 0
     )
     .map(
-      ([size, quantity]) =>
-        `${size}: ${quantity}`
+      ([size, value]) =>
+        `${size}: ${value}`
     )
     .join("   ");
 }
 
-function getDescription(
-  item
-) {
-  const title =
-    String(
-      item?.title ||
-        item?.name ||
-        ""
-    ).trim();
+function productDescription(item) {
+  const name = String(
+    item?.title ||
+      item?.name ||
+      item?.product_name ||
+      item?.description ||
+      ""
+  ).trim();
 
-  const sizes =
-    getSizeText(item);
+  const sizes = sizeText(item);
 
-  if (
-    title &&
-    sizes
-  ) {
-    return `${title}\n${sizes}`;
+  if (name && sizes) {
+    return `${name}\n${sizes}`;
   }
 
-  return (
-    title ||
-    sizes ||
-    "—"
-  );
+  return name || sizes || "—";
 }
 
-function calculateItemsTotal(
-  items
-) {
-  if (
-    !Array.isArray(items)
-  ) {
-    return 0;
-  }
+function itemsTotal(items) {
+  if (!Array.isArray(items)) return 0;
 
   return items.reduce(
-    (
-      total,
-      item
-    ) => {
-      const qty =
-        getTotalQuantity(
-          item
-        );
-
-      const rate =
-        safeNumber(
-          item?.unit_price,
+    (sum, item) => {
+      const qty = totalQty(item);
+      const rate = num(
+        item?.unit_price ??
+          item?.rate ??
+          item?.price ??
           0
-        );
-
-      return (
-        total +
-        qty * rate
       );
+
+      return sum + qty * rate;
     },
     0
   );
 }
 
-function calculateTotalPieces(
-  items
-) {
-  if (
-    !Array.isArray(items)
-  ) {
-    return 0;
-  }
+function piecesTotal(items) {
+  if (!Array.isArray(items)) return 0;
 
   return items.reduce(
-    (
-      total,
-      item
-    ) =>
-      total +
-      getTotalQuantity(
-        item
-      ),
+    (sum, item) =>
+      sum + totalQty(item),
     0
   );
 }
 
-function firstValid(
-  value,
-  fallback
-) {
-  const n =
-    safeNumber(
-      value,
-      NaN
-    );
+/* =========================================================
+   COLOUR
+========================================================= */
 
-  return Number.isFinite(
-    n
-  )
-    ? n
-    : fallback;
+function fill(doc, c) {
+  doc.setFillColor(c[0], c[1], c[2]);
+}
+
+function textColor(doc, c) {
+  doc.setTextColor(c[0], c[1], c[2]);
+}
+
+function drawColor(doc, c) {
+  doc.setDrawColor(c[0], c[1], c[2]);
 }
 
 /* =========================================================
-   IMAGE HELPERS
+   IMAGE
 ========================================================= */
 
-function blobToDataUrl(
-  blob
-) {
+function blobToDataURL(blob) {
   return new Promise(
-    (
-      resolve,
-      reject
-    ) => {
+    (resolve, reject) => {
       const reader =
         new FileReader();
 
-      reader.onload =
-        () =>
-          resolve(
-            reader.result
-          );
+      reader.onload = () =>
+        resolve(reader.result);
 
-      reader.onerror =
-        reject;
+      reader.onerror = reject;
 
-      reader.readAsDataURL(
-        blob
-      );
+      reader.readAsDataURL(blob);
     }
   );
 }
 
-async function imageToDataUrl(
-  src
-) {
+function imageType(data) {
   if (
-    !src ||
-    typeof src !==
-      "string"
+    String(data).startsWith(
+      "data:image/png"
+    )
+  ) {
+    return "PNG";
+  }
+
+  if (
+    String(data).startsWith(
+      "data:image/webp"
+    )
+  ) {
+    return "WEBP";
+  }
+
+  return "JPEG";
+}
+
+/*
+ * IMPORTANT:
+ * Different products may store their image under
+ * different property names.
+ */
+function getImageSource(item) {
+  return (
+    item?.image_url ||
+    item?.imageUrl ||
+    item?.image ||
+    item?.product_image ||
+    item?.productImage ||
+    item?.photo_url ||
+    item?.photo ||
+    item?.thumbnail_url ||
+    item?.thumbnail ||
+    null
+  );
+}
+
+async function fetchImageDirect(url) {
+  try {
+    const response =
+      await fetch(url, {
+        mode: "cors",
+      });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob =
+      await response.blob();
+
+    if (
+      !blob.type.startsWith(
+        "image/"
+      )
+    ) {
+      return null;
+    }
+
+    return await blobToDataURL(
+      blob
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function loadImage(src) {
+  if (!src) return null;
+
+  if (
+    typeof src !== "string"
   ) {
     return null;
   }
@@ -392,89 +285,52 @@ async function imageToDataUrl(
     return src;
   }
 
-  try {
-    let url = src;
+  /*
+   * Try original URL first.
+   */
+  let result =
+    await fetchImageDirect(
+      src
+    );
 
-    if (
-      src.startsWith(
-        "http://"
-      ) ||
-      src.startsWith(
-        "https://"
-      )
-    ) {
-      if (!BACKEND_URL) {
-        return null;
-      }
+  if (result) {
+    return result;
+  }
 
-      url =
+  /*
+   * If backend proxy exists,
+   * try proxy.
+   */
+  if (BACKEND_URL) {
+    try {
+      const proxyURL =
         `${BACKEND_URL}/api/images/proxy?url=${encodeURIComponent(src)}`;
+
+      result =
+        await fetchImageDirect(
+          proxyURL
+        );
+
+      if (result) {
+        return result;
+      }
+    } catch {
+      // ignore
     }
-
-    const response =
-      await fetch(url);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const blob =
-      await response.blob();
-
-    return await blobToDataUrl(
-      blob
-    );
-  } catch (
-    error
-  ) {
-    console.warn(
-      "PDF image loading failed:",
-      error
-    );
-
-    return null;
-  }
-}
-
-function getImageType(
-  dataUrl
-) {
-  if (
-    String(
-      dataUrl || ""
-    ).startsWith(
-      "data:image/png"
-    )
-  ) {
-    return "PNG";
   }
 
-  if (
-    String(
-      dataUrl || ""
-    ).startsWith(
-      "data:image/webp"
-    )
-  ) {
-    return "WEBP";
-  }
-
-  return "JPEG";
+  return null;
 }
 
 /* =========================================================
-   PDF BASE
+   DOC
 ========================================================= */
 
-export function newReceiptDoc() {
+function createDoc() {
   return new jsPDF({
+    orientation: "landscape",
     unit: "mm",
-    format: [
-      PAGE_W,
-      PAGE_H,
-    ],
-    orientation:
-      "landscape",
+    format: [PAGE_W, PAGE_H],
     compress: true,
   });
 }
@@ -486,149 +342,131 @@ export function newReceiptDoc() {
 async function drawHeader(
   doc,
   branding,
-  title,
+  documentType,
   documentNumber
 ) {
-  const y = MARGIN;
+  const top = MARGIN;
 
-  const logoSize = 20;
-
-  let textX =
-    MARGIN;
+  /*
+   * HEADER HEIGHT = 25mm
+   */
+  const headerH = 25;
 
   /*
    * LOGO
    */
-  if (
-    branding?.logo_url
-  ) {
-    const logo =
-      await imageToDataUrl(
-        branding.logo_url
+  const logoSource =
+    branding?.logo_url ||
+    branding?.logo ||
+    null;
+
+  const logo =
+    await loadImage(
+      logoSource
+    );
+
+  if (logo) {
+    try {
+      fill(doc, LIGHT);
+      drawColor(doc, BORDER);
+
+      doc.roundedRect(
+        MARGIN,
+        top,
+        22,
+        22,
+        2,
+        2,
+        "FD"
       );
 
-    if (logo) {
-      try {
-        doc.addImage(
-          logo,
-          getImageType(
-            logo
-          ),
-          MARGIN,
-          y,
-          logoSize,
-          logoSize
-        );
-
-        textX =
-          MARGIN + 25;
-      } catch {
-        textX =
-          MARGIN;
-      }
+      doc.addImage(
+        logo,
+        imageType(logo),
+        MARGIN + 1.5,
+        top + 1.5,
+        19,
+        19
+      );
+    } catch {
+      // no logo
     }
   }
 
   /*
-   * COMPANY
+   * COMPANY TEXT
    */
+  const companyX =
+    logo
+      ? MARGIN + 27
+      : MARGIN;
+
   doc.setFont(
     "helvetica",
     "bold"
   );
 
-  doc.setFontSize(
-    17
-  );
+  doc.setFontSize(16);
 
-  setTextColor(
-    doc,
-    NAVY
-  );
+  textColor(doc, NAVY);
 
   doc.text(
     branding?.company_name ||
       "SC Aura Kurtis",
-    textX,
-    y + 6
+    companyX,
+    top + 7
   );
 
-  /*
-   * ADDRESS
-   */
   doc.setFont(
     "helvetica",
     "normal"
   );
 
-  doc.setFontSize(
-    8
-  );
+  doc.setFontSize(7.5);
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   const address =
     branding?.address ||
+    "Shop No. 14, Ring Road, Surat, Gujarat 395002";
+
+  const phone =
+    branding?.phone ||
+    "+91 98765 00000";
+
+  const gst =
+    branding?.gst ||
+    branding?.gstin ||
     "";
 
-  const contact = [
-    branding?.phone
-      ? branding.phone
-      : null,
+  doc.text(
+    String(address),
+    companyX,
+    top + 12
+  );
 
-    branding?.gst
-      ? `GST: ${branding.gst}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(
-      "   ·   "
-    );
-
-  if (address) {
-    const addressLines =
-      doc.splitTextToSize(
-        String(address),
-        110
-      );
-
-    doc.text(
-      addressLines,
-      textX,
-      y + 11
-    );
-  }
-
-  if (contact) {
-    doc.text(
-      contact,
-      textX,
-      y + 17
-    );
-  }
+  doc.text(
+    `${phone}${gst ? `   ·   GST: ${gst}` : ""}`,
+    companyX,
+    top + 17
+  );
 
   /*
    * DOCUMENT CARD
    */
-  const cardW = 43;
-  const cardH = 24;
+  const cardW = 40;
+  const cardH = 22;
 
   const cardX =
     PAGE_W -
     MARGIN -
     cardW;
 
-  setFillColor(
-    doc,
-    NAVY
-  );
+  fill(doc, NAVY);
 
   doc.roundedRect(
     cardX,
-    y,
+    top,
     cardW,
     cardH,
     3,
@@ -636,18 +474,12 @@ async function drawHeader(
     "F"
   );
 
-  /*
-   * Gold accent line
-   */
-  setFillColor(
-    doc,
-    ACCENT
-  );
+  fill(doc, GOLD);
 
   doc.roundedRect(
     cardX,
-    y,
-    2,
+    top,
+    2.2,
     cardH,
     1,
     1,
@@ -659,119 +491,88 @@ async function drawHeader(
     "bold"
   );
 
-  doc.setFontSize(
-    8
-  );
+  doc.setFontSize(7);
 
-  setTextColor(
+  textColor(
     doc,
     [220, 225, 235]
   );
 
   doc.text(
-    title,
-    cardX +
-      cardW / 2,
-    y + 8,
+    documentType,
+    cardX + cardW / 2,
+    top + 8,
     {
-      align:
-        "center",
+      align: "center",
     }
   );
 
-  doc.setFont(
-    "helvetica",
-    "bold"
-  );
+  doc.setFontSize(12);
 
-  doc.setFontSize(
-    13
-  );
-
-  setTextColor(
-    doc,
-    WHITE
-  );
+  textColor(doc, WHITE);
 
   doc.text(
     String(
-      documentNumber ||
-        ""
+      documentNumber || ""
     ),
-    cardX +
-      cardW / 2,
-    y + 17,
+    cardX + cardW / 2,
+    top + 16,
     {
-      align:
-        "center",
+      align: "center",
     }
   );
 
   /*
    * DIVIDER
    */
-  setDrawColor(
-    doc,
-    BORDER
-  );
+  drawColor(doc, BORDER);
 
   doc.line(
     MARGIN,
-    y + 28,
+    top + headerH,
     PAGE_W - MARGIN,
-    y + 28
+    top + headerH
   );
 
-  return y + 33;
+  return (
+    top +
+    headerH +
+    4
+  );
 }
 
 /* =========================================================
-   INFORMATION CARDS
+   INFO STRIP
 ========================================================= */
 
-function drawInfoCards(
+function drawInfo(
   doc,
   customer,
   details,
-  startY
+  y
 ) {
-  const gap = 5;
+  const gap = 4;
 
-  const leftW = 88;
+  const leftW = 92;
 
   const rightW =
     CONTENT_W -
     leftW -
     gap;
 
-  const cardH = 27;
-
-  const leftX =
-    MARGIN;
-
-  const rightX =
-    MARGIN +
-    leftW +
-    gap;
+  const h = 22;
 
   /*
-   * LEFT CUSTOMER CARD
+   * CUSTOMER
    */
-  setFillColor(
-    doc,
-    LIGHT
-  );
-
-  setDrawColor(
-    doc,
-    BORDER
-  );
+  fill(doc, LIGHT);
+  drawColor(doc, BORDER);
 
   doc.roundedRect(
-    leftX,
-    startY,
+    MARGIN,
+    y,
     leftW,
-    cardH,
+    h,
     2.5,
     2.5,
     "FD"
@@ -782,42 +583,28 @@ function drawInfoCards(
     "bold"
   );
 
-  doc.setFontSize(
-    7.5
-  );
+  doc.setFontSize(6.5);
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   doc.text(
     "CUSTOMER",
-    leftX + 5,
-    startY + 6
+    MARGIN + 4,
+    y + 5
   );
 
-  doc.setFont(
-    "helvetica",
-    "bold"
-  );
+  doc.setFontSize(10);
 
-  doc.setFontSize(
-    11
-  );
-
-  setTextColor(
-    doc,
-    NAVY
-  );
+  textColor(doc, NAVY);
 
   doc.text(
     String(
       customer?.name ||
+        customer?.customer_name ||
         "Walk-in Customer"
     ),
-    leftX + 5,
-    startY + 13
+    MARGIN + 4,
+    y + 12
   );
 
   doc.setFont(
@@ -825,59 +612,52 @@ function drawInfoCards(
     "normal"
   );
 
-  doc.setFontSize(
-    7.8
-  );
+  doc.setFontSize(7);
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   const phone =
-    customer?.phone
-      ? `Phone: ${customer.phone}`
-      : "";
+    customer?.phone ||
+    customer?.mobile ||
+    "";
 
   const shop =
-    customer?.shop_name
-      ? `Shop: ${customer.shop_name}`
-      : "";
+    customer?.shop_name ||
+    customer?.shop ||
+    "";
 
   if (phone) {
     doc.text(
-      phone,
-      leftX + 5,
-      startY + 20
+      `Phone: ${phone}`,
+      MARGIN + 4,
+      y + 18
     );
   }
 
   if (shop) {
     doc.text(
-      shop,
-      leftX + 50,
-      startY + 20
+      `Shop: ${shop}`,
+      MARGIN + 48,
+      y + 18
     );
   }
 
   /*
-   * RIGHT DOCUMENT DETAILS
+   * DETAILS
    */
-  setFillColor(
-    doc,
-    LIGHT
-  );
+  const rightX =
+    MARGIN +
+    leftW +
+    gap;
 
-  setDrawColor(
-    doc,
-    BORDER
-  );
+  fill(doc, LIGHT);
+  drawColor(doc, BORDER);
 
   doc.roundedRect(
     rightX,
-    startY,
+    y,
     rightW,
-    cardH,
+    h,
     2.5,
     2.5,
     "FD"
@@ -888,42 +668,29 @@ function drawInfoCards(
     "bold"
   );
 
-  doc.setFontSize(
-    7.5
-  );
+  doc.setFontSize(6.5);
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   doc.text(
     "DOCUMENT DETAILS",
-    rightX + 5,
-    startY + 6
+    rightX + 4,
+    y + 5
   );
 
-  /*
-   * Date
-   */
   doc.setFont(
     "helvetica",
     "normal"
   );
 
-  doc.setFontSize(
-    7.5
-  );
+  doc.setFontSize(7);
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   doc.text(
     "Date",
-    rightX + 5,
-    startY + 13
+    rightX + 4,
+    y + 12
   );
 
   doc.setFont(
@@ -931,37 +698,27 @@ function drawInfoCards(
     "bold"
   );
 
-  setTextColor(
-    doc,
-    TEXT
-  );
+  textColor(doc, TEXT);
 
   doc.text(
     String(
-      details?.date ||
-        "—"
+      details?.date || "—"
     ),
-    rightX + 23,
-    startY + 13
+    rightX + 20,
+    y + 12
   );
 
-  /*
-   * Status
-   */
   doc.setFont(
     "helvetica",
     "normal"
   );
 
-  setTextColor(
-    doc,
-    MUTED
-  );
+  textColor(doc, MUTED);
 
   doc.text(
     "Status",
-    rightX + 5,
-    startY + 20
+    rightX + 4,
+    y + 18
   );
 
   doc.setFont(
@@ -969,540 +726,433 @@ function drawInfoCards(
     "bold"
   );
 
-  setTextColor(
-    doc,
-    NAVY
-  );
+  textColor(doc, NAVY);
 
   doc.text(
     String(
-      details?.status ||
-        "—"
+      details?.status || "—"
     ),
-    rightX + 23,
-    startY + 20
+    rightX + 20,
+    y + 18
   );
 
-  return (
-    startY +
-    cardH +
-    6
-  );
+  return y + h + 4;
 }
 
 /* =========================================================
    PRODUCT TABLE
 ========================================================= */
 
-async function drawItemsTable(
+async function drawProducts(
   doc,
   items,
-  startY
+  y
 ) {
-  const source =
+  const products =
     Array.isArray(items)
       ? items
       : [];
 
-  const prepared =
-    [];
-
   /*
-   * PREPARE DATA
+   * Load images BEFORE creating table.
    */
+  const rows = [];
+
   for (
-    const item of source
+    const item of products
   ) {
+    const source =
+      getImageSource(item);
+
     const image =
-      item?.image
-        ? await imageToDataUrl(
-            item.image
-          )
-        : null;
-
-    const qty =
-      getTotalQuantity(
-        item
+      await loadImage(
+        source
       );
 
-    const rate =
-      safeNumber(
-        item?.unit_price,
-        0
+    const fullCode =
+      String(
+        item?.sku ||
+          item?.code ||
+          item?.product_code ||
+          item?.sca_code ||
+          ""
+      ).trim();
+
+    /*
+     * ONLY SHOW LAST NUMBER
+     *
+     * SCA-00017 -> 0017
+     * SCA-0017 -> 0017
+     * 0017     -> 0017
+     */
+    let shortCode =
+      fullCode;
+
+    const match =
+      fullCode.match(
+        /(\d+)$/
       );
 
-    const amount =
-      qty * rate;
+    if (match) {
+      shortCode =
+        match[1];
+    }
 
-    prepared.push({
+    rows.push({
       item,
       image,
-      qty,
-      rate,
-      amount,
+      code:
+        shortCode || "—",
       description:
-        getDescription(
+        productDescription(
           item
+        ),
+      qty:
+        totalQty(item),
+      rate:
+        num(
+          item?.unit_price ??
+            item?.rate ??
+            item?.price ??
+            0
         ),
     });
   }
 
-  /*
-   * TABLE WIDTH
-   *
-   * Content width = 190mm
-   *
-   * #       7
-   * SCA     24
-   * IMAGE   30
-   * DESC    70
-   * QTY     12
-   * RATE    22
-   * AMOUNT  25
-   *
-   * TOTAL   190
-   */
   const body =
-    prepared.map(
-      (
-        row,
-        index
-      ) => [
-        String(
-          index + 1
-        ),
-
-        String(
-          row.item
-            ?.sr_number ||
-            ""
-        ),
-
+    rows.map(
+      (row, index) => [
+        String(index + 1),
+        row.code,
         "",
-
-        "",
-
-        String(
-          row.qty
-        ),
-
+        row.description,
+        String(row.qty),
+        money(row.rate),
         money(
-          row.rate
-        ),
-
-        money(
-          row.amount
+          row.qty *
+            row.rate
         ),
       ]
     );
 
-  autoTable(
-    doc,
-    {
-      startY,
+  /*
+   * ========================================================
+   * TABLE
+   *
+   *  #       7
+   *  CODE   19
+   *  IMAGE  35
+   *  DESC   67
+   *  QTY    11
+   *  RATE   23
+   *  AMOUNT 28
+   *
+   * TOTAL = 190
+   * ========================================================
+   */
 
-      head: [
-        [
-          "#",
-          "SCA",
-          "IMAGE",
-          "DESCRIPTION",
-          "QTY",
-          "RATE",
-          "AMOUNT",
-        ],
+  autoTable(doc, {
+    startY: y,
+
+    head: [
+      [
+        "#",
+        "SCA",
+        "IMAGE",
+        "DESCRIPTION",
+        "QTY",
+        "RATE",
+        "AMOUNT",
       ],
+    ],
 
-      body,
+    body,
 
-      theme: "grid",
+    theme: "grid",
 
-      margin: {
-        left: MARGIN,
-        right: MARGIN,
-        bottom: 18,
+    margin: {
+      left: MARGIN,
+      right: MARGIN,
+      top: 5,
+      bottom: 5,
+    },
+
+    /*
+     * CRITICAL:
+     * Keep product row tall enough for image.
+     */
+    styles: {
+      font:
+        "helvetica",
+
+      fontSize: 7.5,
+
+      cellPadding: 2,
+
+      minCellHeight: 34,
+
+      valign: "middle",
+
+      overflow:
+        "linebreak",
+
+      lineColor:
+        BORDER,
+
+      lineWidth:
+        0.18,
+
+      textColor:
+        TEXT,
+    },
+
+    headStyles: {
+      fillColor:
+        NAVY,
+
+      textColor:
+        WHITE,
+
+      fontStyle:
+        "bold",
+
+      fontSize: 7,
+
+      cellPadding: 2,
+
+      valign:
+        "middle",
+    },
+
+    columnStyles: {
+      0: {
+        cellWidth: 7,
+        halign: "center",
       },
 
-      styles: {
-        font:
-          "helvetica",
+      1: {
+        cellWidth: 19,
+        fontStyle: "bold",
+        halign: "left",
+      },
 
-        fontSize:
-          8,
+      2: {
+        cellWidth: 35,
+        halign: "center",
+      },
 
-        cellPadding:
-          2,
-
-        lineColor:
-          BORDER,
-
-        lineWidth:
-          0.18,
-
-        textColor:
-          TEXT,
-
-        valign:
-          "middle",
-
+      3: {
+        cellWidth: 67,
+        fontSize: 8,
         overflow:
           "linebreak",
       },
 
-      headStyles: {
-        fillColor:
-          NAVY,
-
-        textColor:
-          WHITE,
-
-        fontStyle:
-          "bold",
-
-        fontSize:
-          7.5,
-
-        halign:
-          "left",
-
-        valign:
-          "middle",
-
-        cellPadding:
-          2.2,
+      4: {
+        cellWidth: 11,
+        halign: "center",
       },
 
-      alternateRowStyles: {
-        fillColor:
-          WHITE,
+      5: {
+        cellWidth: 23,
+        halign: "right",
       },
 
-      columnStyles: {
-        /*
-         * #
-         */
-        0: {
-          cellWidth: 7,
-          halign:
-            "center",
-        },
-
-        /*
-         * SCA
-         */
-        1: {
-          cellWidth: 24,
-          fontStyle:
-            "bold",
-          overflow:
-            "ellipsize",
-        },
-
-        /*
-         * IMAGE
-         */
-        2: {
-          cellWidth: 30,
-          halign:
-            "center",
-        },
-
-        /*
-         * DESCRIPTION
-         */
-        3: {
-          cellWidth: 70,
-        },
-
-        /*
-         * QTY
-         */
-        4: {
-          cellWidth: 12,
-          halign:
-            "center",
-        },
-
-        /*
-         * RATE
-         */
-        5: {
-          cellWidth: 22,
-          halign:
-            "right",
-        },
-
-        /*
-         * AMOUNT
-         */
-        6: {
-          cellWidth: 25,
-          halign:
-            "right",
-          fontStyle:
-            "bold",
-        },
+      6: {
+        cellWidth: 28,
+        halign: "right",
+        fontStyle: "bold",
       },
+    },
 
-      didParseCell(
-        data
+    didParseCell(data) {
+      if (
+        data.section ===
+          "body" &&
+        data.column.index === 2
       ) {
-        if (
-          data.section !==
-          "body"
-        ) {
-          return;
-        }
-
-        const row =
-          prepared[
-            data.row.index
-          ];
-
-        if (!row) {
-          return;
-        }
-
         /*
-         * IMAGE CELL
+         * Do NOT allow image cell
+         * to collapse.
          */
-        if (
-          data.column.index ===
-          2
-        ) {
-          data.cell.text =
-            [];
+        data.cell.styles.minCellHeight =
+          34;
+      }
 
-          /*
-           * Large image row.
-           */
-          data.cell.minCellHeight =
-            Math.max(
-              31,
-              data.cell
-                .minCellHeight ||
-                0
-            );
-        }
-
-        /*
-         * DESCRIPTION CELL
-         */
-        if (
-          data.column.index ===
-          3
-        ) {
-          data.cell.text =
-            [];
-
-          const lines =
-            doc.splitTextToSize(
-              row.description,
-              65
-            );
-
-          data.cell.minCellHeight =
-            Math.max(
-              31,
-              lines.length *
-                3.5 +
-                7
-            );
-        }
-      },
-
-      didDrawCell(
-        data
+      if (
+        data.section ===
+          "body" &&
+        data.column.index === 3
       ) {
-        if (
-          data.section !==
-          "body"
-        ) {
-          return;
-        }
+        data.cell.styles.minCellHeight =
+          34;
+      }
+    },
 
-        const row =
-          prepared[
-            data.row.index
-          ];
+    didDrawCell(data) {
+      if (
+        data.section !==
+        "body"
+      ) {
+        return;
+      }
 
-        if (!row) {
-          return;
-        }
+      const row =
+        rows[data.row.index];
+
+      if (!row) return;
+
+      /*
+       * =====================================================
+       * IMAGE
+       * =====================================================
+       */
+
+      if (
+        data.column.index === 2
+      ) {
+        const cell =
+          data.cell;
 
         /*
-         * =====================================================
-         * IMAGE
-         * =====================================================
+         * Image background
          */
-        if (
-          data.column.index ===
-          2
-        ) {
-          const cell =
-            data.cell;
+        fill(doc, LIGHT);
+        drawColor(
+          doc,
+          BORDER
+        );
 
-          /*
-           * Light image background.
-           */
-          setFillColor(
-            doc,
-            LIGHT
-          );
+        const boxW = 29;
+        const boxH = 28;
 
-          setDrawColor(
-            doc,
-            BORDER
-          );
+        const boxX =
+          cell.x +
+          (cell.width -
+            boxW) /
+            2;
 
-          const boxSize =
-            Math.min(
-              26,
-              cell.height - 4
+        const boxY =
+          cell.y +
+          (cell.height -
+            boxH) /
+            2;
+
+        doc.roundedRect(
+          boxX,
+          boxY,
+          boxW,
+          boxH,
+          1.5,
+          1.5,
+          "FD"
+        );
+
+        /*
+         * ACTUAL IMAGE
+         */
+        if (row.image) {
+          try {
+            /*
+             * 25 x 25 mm actual product image.
+             */
+            const imageSize =
+              25;
+
+            const imageX =
+              cell.x +
+              (cell.width -
+                imageSize) /
+                2;
+
+            const imageY =
+              cell.y +
+              (cell.height -
+                imageSize) /
+                2;
+
+            doc.addImage(
+              row.image,
+              imageType(
+                row.image
+              ),
+              imageX,
+              imageY,
+              imageSize,
+              imageSize,
+              undefined,
+              "FAST"
             );
-
-          const boxX =
-            cell.x +
-            (
-              cell.width -
-              boxSize
-            ) /
-              2;
-
-          const boxY =
-            cell.y +
-            (
-              cell.height -
-              boxSize
-            ) /
-              2;
-
-          doc.roundedRect(
-            boxX,
-            boxY,
-            boxSize,
-            boxSize,
-            1.5,
-            1.5,
-            "FD"
-          );
-
-          /*
-           * ACTUAL PRODUCT IMAGE
-           */
-          if (row.image) {
-            try {
-              const imageSize =
-                Math.min(
-                  23,
-                  boxSize - 2
-                );
-
-              const imageX =
-                cell.x +
-                (
-                  cell.width -
-                  imageSize
-                ) /
-                  2;
-
-              const imageY =
-                cell.y +
-                (
-                  cell.height -
-                  imageSize
-                ) /
-                  2;
-
-              doc.addImage(
-                row.image,
-                getImageType(
-                  row.image
-                ),
-                imageX,
-                imageY,
-                imageSize,
-                imageSize
-              );
-            } catch (
+          } catch (
+            error
+          ) {
+            console.warn(
+              "Product image could not be drawn",
               error
-            ) {
-              console.warn(
-                "Unable to draw product image:",
-                error
-              );
-            }
+            );
           }
-
-          return;
-        }
-
-        /*
-         * =====================================================
-         * DESCRIPTION
-         * =====================================================
-         */
-        if (
-          data.column.index ===
-          3
-        ) {
-          const cell =
-            data.cell;
-
+        } else {
+          /*
+           * Don't show broken-image icon.
+           * Show clean placeholder instead.
+           */
           doc.setFont(
             "helvetica",
-            "bold"
+            "normal"
           );
 
           doc.setFontSize(
-            8.2
+            6.5
           );
 
-          setTextColor(
+          textColor(
             doc,
-            NAVY
+            MUTED
           );
-
-          const lines =
-            doc.splitTextToSize(
-              row.description,
-              cell.width - 5
-            );
-
-          const lineHeight =
-            3.5;
-
-          const totalHeight =
-            lines.length *
-            lineHeight;
-
-          const startTextY =
-            cell.y +
-            Math.max(
-              6,
-              (
-                cell.height -
-                totalHeight
-              ) /
-                2 +
-                3
-            );
 
           doc.text(
-            lines,
-            cell.x + 2.5,
-            startTextY
+            "IMAGE",
+            cell.x +
+              cell.width /
+                2,
+            cell.y +
+              cell.height /
+                2 +
+              2,
+            {
+              align:
+                "center",
+            }
           );
-
-          return;
         }
-      },
-    }
-  );
+
+        return;
+      }
+
+      /*
+       * =====================================================
+       * DESCRIPTION
+       * =====================================================
+       */
+
+      if (
+        data.column.index === 3
+      ) {
+        /*
+         * We use AutoTable's normal
+         * text wrapping.
+         *
+         * Nothing is manually drawn
+         * outside the cell.
+         */
+        return;
+      }
+    },
+  });
 
   return (
     doc.lastAutoTable.finalY +
-    5
+    4
   );
 }
 
@@ -1513,37 +1163,42 @@ async function drawItemsTable(
 function drawTotals(
   doc,
   lines,
-  startY
+  y
 ) {
-  const boxW =
-    72;
+  const boxW = 68;
+
+  const rowH = 5.5;
 
   const boxH =
     lines.length *
-      6.5 +
-    9;
+      rowH +
+    7;
 
-  const boxX =
+  /*
+   * Keep totals on same page.
+   */
+  const x =
     PAGE_W -
     MARGIN -
     boxW;
 
   /*
-   * Totals card
+   * Never create another page.
    */
-  setFillColor(
-    doc,
-    LIGHT
-  );
+  const safeY =
+    Math.min(
+      y,
+      PAGE_H -
+        boxH -
+        11
+    );
 
-  setDrawColor(
-    doc,
-    BORDER
-  );
+  fill(doc, LIGHT);
+  drawColor(doc, BORDER);
 
   doc.roundedRect(
-    boxX,
-    startY,
+    x,
+    safeY,
     boxW,
     boxH,
     3,
@@ -1551,101 +1206,90 @@ function drawTotals(
     "FD"
   );
 
-  let y =
-    startY + 6;
+  let currentY =
+    safeY + 5;
 
-  for (
-    let i = 0;
-    i < lines.length;
-    i++
-  ) {
-    const [
-      label,
-      value,
-      bold,
-    ] = lines[i];
+  lines.forEach(
+    (
+      line,
+      index
+    ) => {
+      const [
+        label,
+        value,
+        bold,
+      ] = line;
 
-    if (
-      bold &&
-      i > 0
-    ) {
-      setDrawColor(
-        doc,
-        BORDER
+      if (
+        bold &&
+        index > 0
+      ) {
+        drawColor(
+          doc,
+          BORDER
+        );
+
+        doc.line(
+          x + 4,
+          currentY - 3.5,
+          x +
+            boxW -
+            4,
+          currentY - 3.5
+        );
+      }
+
+      doc.setFont(
+        "helvetica",
+        bold
+          ? "bold"
+          : "normal"
       );
 
-      doc.line(
-        boxX + 4,
-        y - 4.2,
-        boxX +
+      doc.setFontSize(
+        bold ? 8 : 7.2
+      );
+
+      textColor(
+        doc,
+        bold
+          ? NAVY
+          : MUTED
+      );
+
+      doc.text(
+        label,
+        x + 4,
+        currentY
+      );
+
+      doc.setFont(
+        "helvetica",
+        bold
+          ? "bold"
+          : "normal"
+      );
+
+      textColor(
+        doc,
+        TEXT
+      );
+
+      doc.text(
+        value,
+        x +
           boxW -
           4,
-        y - 4.2
+        currentY,
+        {
+          align:
+            "right",
+        }
       );
+
+      currentY +=
+        rowH;
     }
-
-    doc.setFont(
-      "helvetica",
-      bold
-        ? "bold"
-        : "normal"
-    );
-
-    doc.setFontSize(
-      bold
-        ? 8.8
-        : 8.2
-    );
-
-    setTextColor(
-      doc,
-      bold
-        ? NAVY
-        : MUTED
-    );
-
-    doc.text(
-      String(label),
-      boxX + 4,
-      y
-    );
-
-    doc.setFont(
-      "helvetica",
-      bold
-        ? "bold"
-        : "normal"
-    );
-
-    doc.setFontSize(
-      bold
-        ? 8.8
-        : 8.2
-    );
-
-    setTextColor(
-      doc,
-      TEXT
-    );
-
-    doc.text(
-      String(value),
-      boxX +
-        boxW -
-        4,
-      y,
-      {
-        align:
-          "right",
-      }
-    );
-
-    y += 6.5;
-  }
-
-  return (
-    startY +
-    boxH
   );
 }
 
@@ -1657,16 +1301,19 @@ function drawFooter(
   doc,
   branding
 ) {
-  setDrawColor(
+  const y =
+    PAGE_H - 5;
+
+  drawColor(
     doc,
     BORDER
   );
 
   doc.line(
     MARGIN,
-    FOOTER_Y - 2,
+    y - 3,
     PAGE_W - MARGIN,
-    FOOTER_Y - 2
+    y - 3
   );
 
   doc.setFont(
@@ -1674,11 +1321,9 @@ function drawFooter(
     "bold"
   );
 
-  doc.setFontSize(
-    7.5
-  );
+  doc.setFontSize(7);
 
-  setTextColor(
+  textColor(
     doc,
     MUTED
   );
@@ -1687,39 +1332,12 @@ function drawFooter(
     branding?.company_name ||
       "SC Aura Kurtis",
     PAGE_W / 2,
-    FOOTER_Y + 1,
+    y,
     {
       align:
         "center",
     }
   );
-}
-
-/* =========================================================
-   TOTAL SPACE
-========================================================= */
-
-function ensureTotalsSpace(
-  doc,
-  currentY,
-  lines
-) {
-  const needed =
-    lines.length *
-      6.5 +
-    15;
-
-  if (
-    currentY +
-      needed >
-    CONTENT_BOTTOM
-  ) {
-    doc.addPage();
-
-    return MARGIN;
-  }
-
-  return currentY;
 }
 
 /* =========================================================
@@ -1731,7 +1349,7 @@ export async function buildBookingPDF(
   branding
 ) {
   const doc =
-    newReceiptDoc();
+    createDoc();
 
   let y =
     await drawHeader(
@@ -1741,21 +1359,25 @@ export async function buildBookingPDF(
       booking?.booking_no
     );
 
+  const customer =
+    booking?.customer_snapshot ||
+    booking?.customer ||
+    {};
+
   y =
-    drawInfoCards(
+    drawInfo(
       doc,
-      booking
-        ?.customer_snapshot,
+      customer,
       {
         date:
-          dateTime(
+          formatDate(
             booking?.created_at
           ),
 
         status:
-          (
+          String(
             booking?.status ||
-            "CONFIRMED"
+              "CONFIRMED"
           ).toUpperCase(),
       },
       y
@@ -1766,31 +1388,26 @@ export async function buildBookingPDF(
     [];
 
   y =
-    await drawItemsTable(
+    await drawProducts(
       doc,
       items,
       y
     );
 
-  const calculated =
-    calculateItemsTotal(
-      items
-    );
-
   const itemTotal =
-    firstValid(
+    num(
       booking?.item_total,
-      calculated
+      itemsTotal(items)
     );
 
   const advance =
-    firstValid(
+    num(
       booking?.advance_received,
       0
     );
 
   const remaining =
-    firstValid(
+    num(
       booking?.remaining,
       Math.max(
         0,
@@ -1800,52 +1417,32 @@ export async function buildBookingPDF(
     );
 
   const pieces =
-    calculateTotalPieces(
-      items
-    );
-
-  const lines = [
-    [
-      "Item Total",
-      money(
-        itemTotal
-      ),
-      false,
-    ],
-
-    [
-      "Advance Received",
-      money(
-        advance
-      ),
-      false,
-    ],
-
-    [
-      "Balance",
-      money(
-        remaining
-      ),
-      true,
-    ],
-
-    [
-      "Total Pieces",
-      String(pieces),
-      false,
-    ],
-  ];
-
-  y =
-    ensureTotalsSpace(
-      doc,
-      y,
-      lines
-    );
+    piecesTotal(items);
 
   drawTotals(
     doc,
-    lines,
+    [
+      [
+        "Item Total",
+        money(itemTotal),
+        false,
+      ],
+      [
+        "Advance Received",
+        money(advance),
+        false,
+      ],
+      [
+        "Remaining",
+        money(remaining),
+        true,
+      ],
+      [
+        "Total Pieces",
+        String(pieces),
+        false,
+      ],
+    ],
     y
   );
 
@@ -1866,7 +1463,7 @@ export async function buildDispatchPDF(
   branding
 ) {
   const doc =
-    newReceiptDoc();
+    createDoc();
 
   let y =
     await drawHeader(
@@ -1877,33 +1474,35 @@ export async function buildDispatchPDF(
     );
 
   y =
-    drawInfoCards(
+    drawInfo(
       doc,
       {
         name:
           dispatch?.dispatch_to ||
+          dispatch?.customer_name ||
           "—",
 
         phone:
           dispatch?.phone ||
+          dispatch?.customer_phone ||
           "",
 
         shop_name:
+          dispatch?.shop_name ||
           "",
       },
       {
         date:
-          dateTime(
+          formatDate(
             dispatch?.created_at
           ),
 
         status:
-          safeNumber(
-            dispatch?.final_payable,
-            0
-          ) <= 0
-            ? "PAID"
-            : "PENDING",
+          String(
+            dispatch?.payment_status ||
+              dispatch?.status ||
+              "PENDING"
+          ).toUpperCase(),
       },
       y
     );
@@ -1913,41 +1512,39 @@ export async function buildDispatchPDF(
     [];
 
   y =
-    await drawItemsTable(
+    await drawProducts(
       doc,
       items,
       y
     );
 
   const itemTotal =
-    firstValid(
+    num(
       dispatch?.item_total,
-      calculateItemsTotal(
-        items
-      )
+      itemsTotal(items)
     );
 
   const delivery =
-    firstValid(
+    num(
       dispatch?.delivery_charges,
       0
     );
 
   const grandTotal =
-    firstValid(
+    num(
       dispatch?.grand_total,
       itemTotal +
         delivery
     );
 
   const advance =
-    firstValid(
+    num(
       dispatch?.advance_received,
       0
     );
 
   const finalPayable =
-    firstValid(
+    num(
       dispatch?.final_payable,
       Math.max(
         0,
@@ -1956,69 +1553,42 @@ export async function buildDispatchPDF(
       )
     );
 
-  const pieces =
-    calculateTotalPieces(
-      items
-    );
-
-  const lines = [
-    [
-      "Item Total",
-      money(
-        itemTotal
-      ),
-      false,
-    ],
-
-    [
-      "Delivery Charges",
-      money(
-        delivery
-      ),
-      false,
-    ],
-
-    [
-      "Grand Total",
-      money(
-        grandTotal
-      ),
-      false,
-    ],
-
-    [
-      "Advance Received",
-      money(
-        advance
-      ),
-      false,
-    ],
-
-    [
-      "Final Payable",
-      money(
-        finalPayable
-      ),
-      true,
-    ],
-
-    [
-      "Total Pieces",
-      String(pieces),
-      false,
-    ],
-  ];
-
-  y =
-    ensureTotalsSpace(
-      doc,
-      y,
-      lines
-    );
-
   drawTotals(
     doc,
-    lines,
+    [
+      [
+        "Item Total",
+        money(itemTotal),
+        false,
+      ],
+      [
+        "Delivery Charges",
+        money(delivery),
+        false,
+      ],
+      [
+        "Grand Total",
+        money(grandTotal),
+        false,
+      ],
+      [
+        "Advance Received",
+        money(advance),
+        false,
+      ],
+      [
+        "Final Payable",
+        money(finalPayable),
+        true,
+      ],
+      [
+        "Total Pieces",
+        String(
+          piecesTotal(items)
+        ),
+        false,
+      ],
+    ],
     y
   );
 
@@ -2039,7 +1609,7 @@ export async function buildEstimatePDF(
   branding
 ) {
   const doc =
-    newReceiptDoc();
+    createDoc();
 
   let y =
     await drawHeader(
@@ -2050,7 +1620,7 @@ export async function buildEstimatePDF(
     );
 
   y =
-    drawInfoCards(
+    drawInfo(
       doc,
       {
         name:
@@ -2062,18 +1632,19 @@ export async function buildEstimatePDF(
           "",
 
         shop_name:
+          estimate?.shop_name ||
           "",
       },
       {
         date:
-          dateTime(
+          formatDate(
             estimate?.created_at
           ),
 
         status:
-          (
+          String(
             estimate?.status ||
-            "DRAFT"
+              "ACTIVE"
           ).toUpperCase(),
       },
       y
@@ -2084,41 +1655,39 @@ export async function buildEstimatePDF(
     [];
 
   y =
-    await drawItemsTable(
+    await drawProducts(
       doc,
       items,
       y
     );
 
   const itemTotal =
-    firstValid(
+    num(
       estimate?.item_total,
-      calculateItemsTotal(
-        items
-      )
+      itemsTotal(items)
     );
 
   const delivery =
-    firstValid(
+    num(
       estimate?.delivery_charges,
       0
     );
 
   const grandTotal =
-    firstValid(
+    num(
       estimate?.grand_total,
       itemTotal +
         delivery
     );
 
   const advance =
-    firstValid(
+    num(
       estimate?.advance_received,
       0
     );
 
   const remaining =
-    firstValid(
+    num(
       estimate?.remaining,
       Math.max(
         0,
@@ -2127,58 +1696,35 @@ export async function buildEstimatePDF(
       )
     );
 
-  const lines = [
-    [
-      "Item Total",
-      money(
-        itemTotal
-      ),
-      false,
-    ],
-
-    [
-      "Delivery Charges",
-      money(
-        delivery
-      ),
-      false,
-    ],
-
-    [
-      "Grand Total",
-      money(
-        grandTotal
-      ),
-      false,
-    ],
-
-    [
-      "Advance Received",
-      money(
-        advance
-      ),
-      false,
-    ],
-
-    [
-      "Balance",
-      money(
-        remaining
-      ),
-      true,
-    ],
-  ];
-
-  y =
-    ensureTotalsSpace(
-      doc,
-      y,
-      lines
-    );
-
   drawTotals(
     doc,
-    lines,
+    [
+      [
+        "Item Total",
+        money(itemTotal),
+        false,
+      ],
+      [
+        "Delivery Charges",
+        money(delivery),
+        false,
+      ],
+      [
+        "Grand Total",
+        money(grandTotal),
+        false,
+      ],
+      [
+        "Advance Received",
+        money(advance),
+        false,
+      ],
+      [
+        "Remaining",
+        money(remaining),
+        true,
+      ],
+    ],
     y
   );
 
@@ -2199,7 +1745,7 @@ export async function buildReturnPDF(
   branding
 ) {
   const doc =
-    newReceiptDoc();
+    createDoc();
 
   let y =
     await drawHeader(
@@ -2210,7 +1756,7 @@ export async function buildReturnPDF(
     );
 
   y =
-    drawInfoCards(
+    drawInfo(
       doc,
       {
         name:
@@ -2219,13 +1765,10 @@ export async function buildReturnPDF(
 
         phone:
           "",
-
-        shop_name:
-          "",
       },
       {
         date:
-          dateTime(
+          formatDate(
             returnData?.created_at
           ),
 
@@ -2240,51 +1783,34 @@ export async function buildReturnPDF(
     [];
 
   y =
-    await drawItemsTable(
+    await drawProducts(
       doc,
       items,
       y
     );
 
   const itemTotal =
-    firstValid(
+    num(
       returnData?.item_total,
-      calculateItemsTotal(
-        items
-      )
-    );
-
-  const pieces =
-    calculateTotalPieces(
-      items
-    );
-
-  const lines = [
-    [
-      "Item Total",
-      money(
-        itemTotal
-      ),
-      true,
-    ],
-
-    [
-      "Pieces Returned",
-      String(pieces),
-      false,
-    ],
-  ];
-
-  y =
-    ensureTotalsSpace(
-      doc,
-      y,
-      lines
+      itemsTotal(items)
     );
 
   drawTotals(
     doc,
-    lines,
+    [
+      [
+        "Item Total",
+        money(itemTotal),
+        true,
+      ],
+      [
+        "Pieces Returned",
+        String(
+          piecesTotal(items)
+        ),
+        false,
+      ],
+    ],
     y
   );
 
@@ -2331,7 +1857,7 @@ export async function sharePDF(
     );
   }
 
-  const finalFilename =
+  const finalName =
     filename ||
     "SC-Aura-Receipt.pdf";
 
@@ -2341,7 +1867,7 @@ export async function sharePDF(
   const file =
     new File(
       [blob],
-      finalFilename,
+      finalName,
       {
         type:
           "application/pdf",
@@ -2357,47 +1883,37 @@ export async function sharePDF(
     try {
       await navigator.share({
         files: [file],
-        title:
-          finalFilename,
+        title: finalName,
       });
 
       return true;
     } catch {
-      /*
-       * Fallback below.
-       */
+      // fallback
     }
   }
 
-  doc.save(
-    finalFilename
-  );
+  doc.save(finalName);
 
   const cleanPhone =
     String(
       phone || ""
-    )
-      .replace(
-        /[^\d+]/g,
-        ""
-      )
-      .replace(
-        /^\+/,
-        ""
-      );
-
-  const text =
-    encodeURIComponent(
-      `${finalFilename} — Please find the receipt attached.`
+    ).replace(
+      /[^\d]/g,
+      ""
     );
 
-  const whatsappUrl =
+  const message =
+    encodeURIComponent(
+      `${finalName} - SC Aura Kurtis`
+    );
+
+  const url =
     cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${text}`
-      : `https://wa.me/?text=${text}`;
+      ? `https://wa.me/${cleanPhone}?text=${message}`
+      : `https://wa.me/?text=${message}`;
 
   window.open(
-    whatsappUrl,
+    url,
     "_blank",
     "noopener"
   );
