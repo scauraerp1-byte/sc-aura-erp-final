@@ -1,24 +1,60 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import axios from "axios";
-import { API_BASE } from "../lib/api";
 import {
-  shareCatalogue,
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useParams,
+} from "react-router-dom";
+
+import axios from "axios";
+
+import {
+  API_BASE,
+} from "../lib/api";
+
+import {
+  prepareCatalogueShare,
+  sharePreparedCatalogue,
+  sharePreparedCatalogueDesktop,
   formatRupee,
 } from "../lib/share";
+
 import {
   Share2,
-  ShoppingBag,
   MessageCircle,
   ChevronLeft,
   ChevronRight,
-  X,
-  MessageSquare,
-  Smartphone,
 } from "lucide-react";
 
+/* =========================================================
+   MOBILE DETECTION
+========================================================= */
+
+function isMobileDevice() {
+  if (
+    typeof navigator ===
+    "undefined"
+  ) {
+    return false;
+  }
+
+  const ua =
+    navigator.userAgent ||
+    "";
+
+  return /android|iphone|ipad|ipod|mobile/i.test(
+    ua
+  );
+}
+
+/* =========================================================
+   PUBLIC CATALOGUE
+========================================================= */
+
 export default function PublicCatalogue() {
-  const { sr } = useParams();
+  const { sr } =
+    useParams();
 
   const [data, setData] =
     useState(null);
@@ -28,6 +64,15 @@ export default function PublicCatalogue() {
 
   const [imgIdx, setImgIdx] =
     useState(0);
+
+  const [prepared, setPrepared] =
+    useState(null);
+
+  const [preparingShare, setPreparingShare] =
+    useState(true);
+
+  const [shareError, setShareError] =
+    useState("");
 
   const [showShareMenu, setShowShareMenu] =
     useState(false);
@@ -45,7 +90,9 @@ export default function PublicCatalogue() {
         `${API_BASE}/public/catalogue/${sr}`
       )
       .then((response) => {
-        setData(response.data);
+        setData(
+          response.data
+        );
       })
       .catch((error) => {
         setErr(
@@ -54,6 +101,71 @@ export default function PublicCatalogue() {
         );
       });
   }, [sr]);
+
+  /* =====================================================
+     PREPARE SHARE FILES AFTER PRODUCT LOAD
+  *
+  * IMPORTANT:
+  * This happens BEFORE user taps Share.
+  ===================================================== */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function prepare() {
+      if (!data?.product) {
+        return;
+      }
+
+      setPreparingShare(
+        true
+      );
+
+      setShareError("");
+
+      try {
+        const result =
+          await prepareCatalogueShare({
+            product:
+              data.product,
+          });
+
+        if (!cancelled) {
+          setPrepared(
+            result
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Catalogue share preparation failed:",
+          error
+        );
+
+        if (!cancelled) {
+          setShareError(
+            error?.message ||
+              "Unable to prepare catalogue sharing."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPreparingShare(
+            false
+          );
+        }
+      }
+    }
+
+    prepare();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    data?.product?.sr_number,
+    data?.product?.id,
+    data?.product?.title,
+  ]);
 
   /* =====================================================
      STATES
@@ -91,7 +203,7 @@ export default function PublicCatalogue() {
   } = data;
 
   /* =====================================================
-     WHATSAPP NUMBER
+     WHATSAPP
   ===================================================== */
 
   const wa = (
@@ -104,7 +216,7 @@ export default function PublicCatalogue() {
   );
 
   /* =====================================================
-     PRODUCT IMAGES
+     IMAGES
   ===================================================== */
 
   const images =
@@ -115,87 +227,88 @@ export default function PublicCatalogue() {
         : [null];
 
   /* =====================================================
-     SHARE MENU OPEN
+     OPEN SHARE
   ===================================================== */
 
-  const handleShare = (
-    e
-  ) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+  const handleShare =
+    async (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
 
-    if (sharing) {
-      return;
-    }
+      if (
+        sharing ||
+        preparingShare ||
+        !prepared
+      ) {
+        return;
+      }
 
-    setShowShareMenu(true);
-  };
+      /*
+       * MOBILE:
+       *
+       * Direct native share.
+       *
+       * IMPORTANT:
+       * prepared files already exist,
+       * so there is NO await before
+       * navigator.share().
+       */
+      if (
+        isMobileDevice() &&
+        typeof navigator !==
+          "undefined" &&
+        typeof navigator.share ===
+          "function"
+      ) {
+        setSharing(true);
+
+        try {
+          await sharePreparedCatalogue({
+            prepared,
+          });
+        } finally {
+          setSharing(false);
+        }
+
+        return;
+      }
+
+      /*
+       * DESKTOP:
+       * custom chooser.
+       */
+      setShowShareMenu(
+        true
+      );
+    };
 
   /* =====================================================
-     ACTUAL SHARE
+     DESKTOP DESTINATION
   ===================================================== */
 
   const handleShareDestination =
     async (
       destination
     ) => {
-      if (sharing) {
+      if (
+        sharing ||
+        !prepared
+      ) {
         return;
       }
 
       setSharing(true);
 
       try {
-        /*
-         * Product details are passed
-         * to share.js.
-         *
-         * IMPORTANT:
-         * No public catalogue URL.
-         */
-
-        await shareCatalogue({
-          product: {
-            ...product,
-
-            images,
-
-            sr_number:
-              product?.sr_number ||
-              sr ||
-              "",
-
-            title:
-              product?.title ||
-              "",
-
-            category:
-              product?.category ||
-              "",
-
-            price:
-              product?.price ||
-              0,
-
-            description:
-              product?.description ||
-              "",
-
-            available_sizes:
-              product?.available_sizes ||
-              [],
-
-            size_preset:
-              product?.size_preset ||
-              "",
-          },
-
-          phone: wa,
-
+        await sharePreparedCatalogueDesktop({
+          prepared,
           destination,
+          phone: wa,
         });
 
-        setShowShareMenu(false);
+        setShowShareMenu(
+          false
+        );
       } catch (error) {
         console.error(
           "Catalogue sharing failed:",
@@ -229,6 +342,17 @@ export default function PublicCatalogue() {
     };
 
   /* =====================================================
+     SHARE BUTTON TEXT
+  ===================================================== */
+
+  const shareButtonText =
+    sharing
+      ? "Sharing..."
+      : preparingShare
+        ? "Preparing..."
+        : "Share This Piece";
+
+  /* =====================================================
      UI
   ===================================================== */
 
@@ -246,7 +370,9 @@ export default function PublicCatalogue() {
 
             {branding?.logo_url ? (
               <img
-                src={branding.logo_url}
+                src={
+                  branding.logo_url
+                }
                 alt={
                   branding?.company_name ||
                   "SC Aura Kurtis"
@@ -272,19 +398,23 @@ export default function PublicCatalogue() {
 
           </div>
 
-          {/* TOP SHARE BUTTON */}
+          {/* TOP SHARE */}
 
           <button
             type="button"
-            onClick={handleShare}
-            disabled={sharing}
+            onClick={
+              handleShare
+            }
+            disabled={
+              sharing ||
+              preparingShare ||
+              !prepared
+            }
             className="rounded-full glass px-4 py-2 text-xs uppercase tracking-[0.15em] inline-flex items-center gap-2 hover:bg-white/10 transition disabled:opacity-50"
           >
             <Share2 className="w-4 h-4" />
 
-            {sharing
-              ? "Preparing..."
-              : "Share"}
+            {shareButtonText}
           </button>
 
         </div>
@@ -297,17 +427,18 @@ export default function PublicCatalogue() {
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
 
         {/* =================================================
-            HERO IMAGE CAROUSEL
+            HERO IMAGE
         ================================================= */}
 
         <div className="relative aspect-[4/5] rounded-3xl overflow-hidden glass">
 
           {images[imgIdx] ? (
             <img
-              src={images[imgIdx]}
+              src={
+                images[imgIdx]
+              }
               alt={
-                product?.title ||
-                "Product"
+                product.title
               }
               className="w-full h-full object-cover"
             />
@@ -316,8 +447,6 @@ export default function PublicCatalogue() {
               No image
             </div>
           )}
-
-          {/* PREVIOUS */}
 
           {images.length > 1 && (
             <>
@@ -337,15 +466,12 @@ export default function PublicCatalogue() {
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
-              {/* NEXT */}
-
               <button
                 type="button"
                 onClick={() =>
                   setImgIdx(
                     (i) =>
-                      (i +
-                        1) %
+                      (i + 1) %
                       images.length
                   )
                 }
@@ -353,8 +479,6 @@ export default function PublicCatalogue() {
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
-
-              {/* DOTS */}
 
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                 {images.map(
@@ -381,26 +505,23 @@ export default function PublicCatalogue() {
         <div className="space-y-3">
 
           <div className="text-[10px] uppercase tracking-[0.3em] text-[#ebd281]">
-            {product?.sr_number ||
-              sr}{" "}
-            ·{" "}
-            {product?.category ||
-              "Product"}
+            {product.sr_number} ·{" "}
+            {product.category}
           </div>
 
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight">
-            {product?.title}
+            {product.title}
           </h1>
 
           <p className="text-sm text-white/65 leading-relaxed">
-            {product?.description ||
+            {product.description ||
               "Premium handcrafted from SC Aura Kurtis."}
           </p>
 
           <div className="flex items-baseline gap-3">
             <span className="font-display text-4xl gold-text">
               {formatRupee(
-                product?.price
+                product.price
               )}
             </span>
 
@@ -415,14 +536,14 @@ export default function PublicCatalogue() {
 
             <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">
               Available sizes{" "}
-              {product?.size_preset
+              {product.size_preset
                 ? `(${product.size_preset})`
                 : ""}
             </div>
 
             <div className="flex flex-wrap gap-2">
 
-              {!product?.available_sizes
+              {!product.available_sizes
                 ?.length && (
                 <span className="text-sm text-amber-300">
                   Currently out of stock
@@ -430,7 +551,7 @@ export default function PublicCatalogue() {
               )}
 
               {(
-                product?.available_sizes ||
+                product.available_sizes ||
                 []
               ).map(
                 (size) => (
@@ -449,7 +570,7 @@ export default function PublicCatalogue() {
         </div>
 
         {/* =================================================
-            CTA BUTTONS
+            CTA
         ================================================= */}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sticky bottom-3 z-20">
@@ -470,15 +591,19 @@ export default function PublicCatalogue() {
 
           <button
             type="button"
-            onClick={handleShare}
-            disabled={sharing}
+            onClick={
+              handleShare
+            }
+            disabled={
+              sharing ||
+              preparingShare ||
+              !prepared
+            }
             className="btn-gold rounded-full py-3 text-sm uppercase tracking-[0.18em] inline-flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Share2 className="w-4 h-4" />
 
-            {sharing
-              ? "Preparing..."
-              : "Share This Piece"}
+            {shareButtonText}
           </button>
 
         </div>
@@ -490,10 +615,10 @@ export default function PublicCatalogue() {
         <div className="glass rounded-2xl p-5 text-sm text-white/70">
 
           <div className="font-display text-lg text-white mb-1">
-            {branding?.company_name}
+            {branding.company_name}
           </div>
 
-          {branding?.address && (
+          {branding.address && (
             <div className="text-xs text-white/60">
               {branding.address}
             </div>
@@ -501,20 +626,20 @@ export default function PublicCatalogue() {
 
           <div className="text-xs text-white/60 flex flex-wrap gap-3 mt-2">
 
-            {branding?.phone && (
+            {branding.phone && (
               <span>
                 {branding.phone}
               </span>
             )}
 
-            {branding?.whatsapp && (
+            {branding.whatsapp && (
               <span>
                 WA:{" "}
                 {branding.whatsapp}
               </span>
             )}
 
-            {branding?.gst && (
+            {branding.gst && (
               <span>
                 GST:{" "}
                 {branding.gst}
@@ -537,21 +662,22 @@ export default function PublicCatalogue() {
 
       </main>
 
-      {/* ===================================================
-          SHARE DESTINATION MODAL
-      =================================================== */}
+      {/* =================================================
+          DESKTOP SHARE MENU
+      ================================================= */}
 
       {showShareMenu && (
         <div
-          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
           onClick={() =>
             !sharing &&
-            setShowShareMenu(false)
+            setShowShareMenu(
+              false
+            )
           }
         >
-
           <div
-            className="w-full max-w-sm glass rounded-3xl p-5 shadow-2xl border border-white/10"
+            className="w-full max-w-sm rounded-3xl glass border border-white/10 p-5 shadow-2xl"
             onClick={(e) =>
               e.stopPropagation()
             }
@@ -579,9 +705,9 @@ export default function PublicCatalogue() {
                   )
                 }
                 disabled={sharing}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center"
+                className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-white text-lg"
               >
-                <X className="w-4 h-4" />
+                ×
               </button>
 
             </div>
@@ -596,23 +722,21 @@ export default function PublicCatalogue() {
                 )
               }
               disabled={sharing}
-              className="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black py-4 px-4 flex items-center gap-4 transition disabled:opacity-50"
+              className="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black p-4 flex items-center gap-4 transition disabled:opacity-50"
             >
-
-              <div className="w-11 h-11 rounded-full bg-black/10 grid place-items-center">
-                <MessageCircle className="w-5 h-5" />
+              <div className="w-11 h-11 rounded-full bg-black/10 grid place-items-center text-xl">
+                💬
               </div>
 
               <div className="text-left">
-                <div className="font-medium">
+                <div className="font-semibold">
                   WhatsApp
                 </div>
 
-                <div className="text-xs opacity-70 mt-0.5">
-                  Share product images & details
+                <div className="text-xs opacity-70 mt-1">
+                  Share product image & details
                 </div>
               </div>
-
             </button>
 
             {/* OTHER */}
@@ -625,32 +749,34 @@ export default function PublicCatalogue() {
                 )
               }
               disabled={sharing}
-              className="w-full mt-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white py-4 px-4 flex items-center gap-4 transition disabled:opacity-50"
+              className="w-full mt-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 flex items-center gap-4 transition disabled:opacity-50"
             >
-
               <div className="w-11 h-11 rounded-full bg-white/10 grid place-items-center">
-                <Share2 className="w-5 h-5" />
+                <Share2
+                  size={20}
+                />
               </div>
 
               <div className="text-left">
-                <div className="font-medium">
+                <div className="font-semibold">
                   Other
                 </div>
 
-                <div className="text-xs text-white/45 mt-0.5">
-                  Use your device's share options
+                <div className="text-xs text-white/40 mt-1">
+                  Use device share options
                 </div>
               </div>
-
             </button>
 
-            {/* PRODUCT PREVIEW */}
+            {/* PREVIEW */}
 
-            <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-3">
+            <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-3">
 
               {images[0] ? (
                 <img
-                  src={images[0]}
+                  src={
+                    images[0]
+                  }
                   alt=""
                   className="w-12 h-12 rounded-xl object-cover"
                 />
@@ -661,18 +787,29 @@ export default function PublicCatalogue() {
               <div className="min-w-0">
 
                 <div className="text-sm text-white truncate">
-                  {product?.title}
+                  {product.title}
                 </div>
 
                 <div className="text-[10px] uppercase tracking-[0.15em] text-[#ebd281] mt-1">
-                  {product?.sr_number ||
-                    sr}
+                  {product.sr_number}
                 </div>
 
               </div>
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* =================================================
+          SHARE PREPARATION ERROR
+      ================================================= */}
+
+      {shareError && (
+        <div className="fixed bottom-4 left-4 right-4 z-[10000] pointer-events-none">
+          <div className="max-w-md mx-auto rounded-2xl bg-red-500/90 text-white px-4 py-3 text-xs shadow-xl">
+            {shareError}
           </div>
         </div>
       )}
