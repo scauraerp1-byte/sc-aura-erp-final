@@ -1,23 +1,22 @@
 /**
  * SC AURA ERP
- * FINAL CATALOGUE SHARING UTILITY
+ * FINAL CATALOGUE SHARING
  *
  * MOBILE:
- * - Product image + SCA code
+ * - Product image
+ * - SCA code below image
+ * - Product details as share text
  * - Native Android / iPhone share sheet
- * - Prepared image cache
  *
  * DESKTOP:
  * - WhatsApp
- * - Other / browser share
- * - Download generated catalogue images
+ * - Other
+ * - Download generated catalogue image
  *
- * CATALOGUE IMAGE:
- * - Actual product image
- * - SCA code below image
- * - SCA code left aligned
- * - Product details shared as text
- * - NO catalogue URL
+ * IMPORTANT:
+ * - No catalogue URL in catalogue image sharing
+ * - No "View Catalogue"
+ * - No text-only fallback when image sharing fails
  */
 
 const preparedCache = new Map();
@@ -32,7 +31,7 @@ const cleanPhone = (p) =>
     .replace(/^\+/, "");
 
 /* =========================================================
-   WHATSAPP
+   WHATSAPP URL
 ========================================================= */
 
 export function whatsappUrl(phone, text) {
@@ -42,23 +41,31 @@ export function whatsappUrl(phone, text) {
     ? `https://wa.me/${target}`
     : "https://wa.me/";
 
-  return `${base}?text=${encodeURIComponent(text || "")}`;
+  return `${base}?text=${encodeURIComponent(
+    text || ""
+  )}`;
 }
 
 export function shareWhatsApp({ phone, text }) {
-  const url = whatsappUrl(phone, text);
-
-  if (typeof window !== "undefined") {
-    window.open(
-      url,
-      "_blank",
-      "noopener,noreferrer"
-    );
+  if (typeof window === "undefined") {
+    return;
   }
+
+  const url = whatsappUrl(
+    phone,
+    text
+  );
+
+  window.open(
+    url,
+    "_blank",
+    "noopener,noreferrer"
+  );
 }
 
 /* =========================================================
    NORMAL PAGE SHARE
+   Used elsewhere in ERP.
 ========================================================= */
 
 export async function sharePage({
@@ -80,7 +87,9 @@ export async function sharePage({
 
       return true;
     } catch (error) {
-      if (error?.name === "AbortError") {
+      if (
+        error?.name === "AbortError"
+      ) {
         return false;
       }
     }
@@ -107,11 +116,8 @@ export function isMobileDevice() {
     return false;
   }
 
-  const ua =
-    navigator.userAgent || "";
-
   return /android|iphone|ipad|ipod|mobile/i.test(
-    ua
+    navigator.userAgent || ""
   );
 }
 
@@ -122,7 +128,7 @@ export function isMobileDevice() {
 export function getProductImages(product) {
   if (
     Array.isArray(product?.images) &&
-    product.images.length
+    product.images.length > 0
   ) {
     return product.images.filter(Boolean);
   }
@@ -161,18 +167,10 @@ export function getScaCode(product) {
     return "";
   }
 
-  /*
-   * If already SCA-00017
-   * keep it exactly like that.
-   */
   if (/^SCA-/i.test(raw)) {
     return raw.toUpperCase();
   }
 
-  /*
-   * If product has 00017,
-   * create SCA-00017.
-   */
   const match =
     raw.match(/(\d+)$/);
 
@@ -184,7 +182,7 @@ export function getScaCode(product) {
 }
 
 /* =========================================================
-   IMAGE URL NORMALIZER
+   IMAGE URL
 ========================================================= */
 
 function normalizeImageUrl(source) {
@@ -236,8 +234,9 @@ async function fetchImageBlob(source) {
    * DATA URL
    */
   if (
-    typeof url === "string" &&
-    url.startsWith("data:image/")
+    url.startsWith(
+      "data:image/"
+    )
   ) {
     const response =
       await fetch(url);
@@ -247,7 +246,7 @@ async function fetchImageBlob(source) {
 
     if (!blob.size) {
       throw new Error(
-        "Image returned empty data."
+        "Image is empty."
       );
     }
 
@@ -258,7 +257,6 @@ async function fetchImageBlob(source) {
    * BLOB URL
    */
   if (
-    typeof url === "string" &&
     url.startsWith("blob:")
   ) {
     const response =
@@ -269,7 +267,7 @@ async function fetchImageBlob(source) {
 
     if (!blob.size) {
       throw new Error(
-        "Image returned empty data."
+        "Image is empty."
       );
     }
 
@@ -282,7 +280,7 @@ async function fetchImageBlob(source) {
   const timeout =
     setTimeout(() => {
       controller.abort();
-    }, 10000);
+    }, 15000);
 
   try {
     const response =
@@ -290,14 +288,14 @@ async function fetchImageBlob(source) {
         method: "GET",
         mode: "cors",
         credentials: "omit",
-        cache: "force-cache",
+        cache: "no-store",
         signal:
           controller.signal,
       });
 
     if (!response.ok) {
       throw new Error(
-        `Image request failed (${response.status}).`
+        `Image request failed: ${response.status}`
       );
     }
 
@@ -307,6 +305,19 @@ async function fetchImageBlob(source) {
     if (!blob.size) {
       throw new Error(
         "Image returned empty data."
+      );
+    }
+
+    /*
+     * Make sure browser actually
+     * received an image.
+     */
+    if (
+      blob.type &&
+      !blob.type.startsWith("image/")
+    ) {
+      throw new Error(
+        `Invalid image type: ${blob.type}`
       );
     }
 
@@ -335,7 +346,9 @@ function loadImageFromBlob(blob) {
   return new Promise(
     (resolve, reject) => {
       const objectUrl =
-        URL.createObjectURL(blob);
+        URL.createObjectURL(
+          blob
+        );
 
       const img =
         new Image();
@@ -355,7 +368,7 @@ function loadImageFromBlob(blob) {
 
         reject(
           new Error(
-            "Unable to read product image."
+            "Unable to decode product image."
           )
         );
       };
@@ -367,7 +380,7 @@ function loadImageFromBlob(blob) {
 }
 
 /* =========================================================
-   CREATE CATALOGUE IMAGE
+   CREATE SHARE IMAGE
 ========================================================= */
 
 async function createCatalogueImage(
@@ -385,10 +398,10 @@ async function createCatalogueImage(
     );
 
   /*
-   * Keep image reasonably sized
-   * for WhatsApp sharing.
+   * Keep image large enough for
+   * WhatsApp but not unnecessarily huge.
    */
-  const MAX_WIDTH = 1200;
+  const MAX_WIDTH = 1400;
 
   const originalWidth =
     img.naturalWidth ||
@@ -426,11 +439,11 @@ async function createCatalogueImage(
     );
 
   /*
-   * Small code strip.
+   * SCA strip.
    */
   const stripHeight =
     Math.max(
-      52,
+      56,
       Math.round(
         width * 0.045
       )
@@ -484,7 +497,7 @@ async function createCatalogueImage(
   );
 
   /*
-   * Code strip.
+   * White SCA strip.
    */
   ctx.fillStyle =
     "#ffffff";
@@ -497,16 +510,16 @@ async function createCatalogueImage(
   );
 
   /*
-   * SCA code.
+   * SCA code left aligned.
    */
   ctx.fillStyle =
     "#111111";
 
   ctx.font =
     `700 ${Math.max(
-      22,
+      24,
       Math.round(
-        width * 0.027
+        width * 0.028
       )
     )}px Arial, sans-serif`;
 
@@ -525,6 +538,9 @@ async function createCatalogueImage(
       stripHeight / 2
   );
 
+  /*
+   * Convert canvas to real JPEG Blob.
+   */
   const output =
     await new Promise(
       (resolve) => {
@@ -538,7 +554,7 @@ async function createCatalogueImage(
 
   if (!output) {
     throw new Error(
-      "Unable to create share image."
+      "Unable to create JPG."
     );
   }
 
@@ -546,7 +562,7 @@ async function createCatalogueImage(
 }
 
 /* =========================================================
-   PRODUCT DETAILS TEXT
+   PRODUCT DETAILS
 ========================================================= */
 
 export function getProductDetails(product) {
@@ -573,7 +589,7 @@ export function getProductDetails(product) {
       : String(
           product?.size_preset ||
             ""
-        );
+        ).trim();
 
   const price =
     Number(
@@ -638,7 +654,7 @@ export function getProductDetails(product) {
    CACHE KEY
 ========================================================= */
 
-function getProductCacheKey(product) {
+function getCacheKey(product) {
   return String(
     product?.id ||
       product?.sr_number ||
@@ -662,10 +678,11 @@ export async function prepareCatalogueShare({
   }
 
   const cacheKey =
-    getProductCacheKey(
-      product
-    );
+    getCacheKey(product);
 
+  /*
+   * Use already prepared files.
+   */
   if (
     cacheKey &&
     preparedCache.has(cacheKey)
@@ -697,6 +714,9 @@ export async function prepareCatalogueShare({
 
   const files = [];
 
+  /*
+   * Prepare every product image.
+   */
   for (
     let i = 0;
     i < images.length;
@@ -708,16 +728,22 @@ export async function prepareCatalogueShare({
         sca
       );
 
-    files.push(
+    /*
+     * IMPORTANT:
+     * Real File object, not Blob.
+     */
+    const file =
       new File(
         [blob],
         `${sca}-${i + 1}.jpg`,
         {
-          type:
-            "image/jpeg",
+          type: "image/jpeg",
+          lastModified:
+            Date.now(),
         }
-      )
-    );
+      );
+
+    files.push(file);
   }
 
   const prepared = {
@@ -744,11 +770,6 @@ export async function prepareCatalogueShare({
 
 /* =========================================================
    PRELOAD
- *
- * IMPORTANT:
- * Call this while product/card is already visible.
- * This means the actual button tap can call
- * navigator.share() immediately using prepared files.
 ========================================================= */
 
 export function preloadCatalogueShare(
@@ -762,19 +783,14 @@ export function preloadCatalogueShare(
     );
   }
 
-  const cacheKey =
-    getProductCacheKey(
+  const existing =
+    getPreparedCatalogue(
       product
     );
 
-  if (
-    cacheKey &&
-    preparedCache.has(cacheKey)
-  ) {
+  if (existing) {
     return Promise.resolve(
-      preparedCache.get(
-        cacheKey
-      )
+      existing
     );
   }
 
@@ -791,16 +807,14 @@ export function preloadCatalogueShare(
 }
 
 /* =========================================================
-   GET PREPARED CACHE
+   GET CACHE
 ========================================================= */
 
 export function getPreparedCatalogue(
   product
 ) {
   const cacheKey =
-    getProductCacheKey(
-      product
-    );
+    getCacheKey(product);
 
   if (!cacheKey) {
     return null;
@@ -814,16 +828,14 @@ export function getPreparedCatalogue(
 }
 
 /* =========================================================
-   CLEAR PREPARED CACHE
+   CLEAR CACHE
 ========================================================= */
 
 export function clearPreparedCatalogue(
   product
 ) {
   const cacheKey =
-    getProductCacheKey(
-      product
-    );
+    getCacheKey(product);
 
   if (cacheKey) {
     preparedCache.delete(
@@ -833,15 +845,23 @@ export function clearPreparedCatalogue(
 }
 
 /* =========================================================
-   NATIVE SHARE
+   NATIVE FILE SHARE
 ========================================================= */
 
 export async function sharePreparedCatalogue({
   prepared,
 }) {
   if (
-    !prepared?.files?.length
+    !prepared ||
+    !Array.isArray(
+      prepared.files
+    ) ||
+    prepared.files.length === 0
   ) {
+    console.error(
+      "No catalogue files available."
+    );
+
     return false;
   }
 
@@ -851,54 +871,68 @@ export async function sharePreparedCatalogue({
     typeof navigator.share !==
       "function"
   ) {
+    console.error(
+      "Native sharing is not supported."
+    );
+
     return false;
   }
 
   /*
-   * Check file sharing support.
+   * Check whether browser supports
+   * sharing actual files.
    */
   if (
     typeof navigator.canShare ===
     "function"
   ) {
-    let supported =
-      false;
-
     try {
-      supported =
+      const canShareFiles =
         navigator.canShare({
           files:
             prepared.files,
         });
-    } catch {
-      supported = false;
-    }
 
-    if (!supported) {
+      if (!canShareFiles) {
+        console.error(
+          "This browser cannot share image files."
+        );
+
+        return false;
+      }
+    } catch (error) {
+      console.error(
+        "File share capability check failed:",
+        error
+      );
+
       return false;
     }
   }
 
   try {
     /*
-     * IMPORTANT:
-     * No await before navigator.share().
+     * ACTUAL FILE SHARE.
      *
-     * This keeps the native share call
-     * as close as possible to the
-     * user's button activation.
+     * Do NOT replace this with a
+     * text-only navigator.share().
      */
     await navigator.share({
-      title:
-        prepared.title,
-      text:
-        prepared.details,
       files:
         prepared.files,
+
+      title:
+        prepared.title,
+
+      text:
+        prepared.details,
     });
 
     return true;
   } catch (error) {
+    /*
+     * User closed/cancelled share sheet.
+     */
     if (
       error?.name ===
       "AbortError"
@@ -907,7 +941,7 @@ export async function sharePreparedCatalogue({
     }
 
     console.error(
-      "Native catalogue share failed:",
+      "Native IMAGE share failed:",
       error
     );
 
@@ -916,7 +950,7 @@ export async function sharePreparedCatalogue({
 }
 
 /* =========================================================
-   DOWNLOAD
+   DESKTOP DOWNLOAD
 ========================================================= */
 
 function downloadFile(
@@ -951,7 +985,7 @@ function downloadFile(
     URL.revokeObjectURL(
       url
     );
-  }, 1000);
+  }, 1500);
 }
 
 /* =========================================================
@@ -973,8 +1007,7 @@ export async function sharePreparedCatalogueDesktop({
    * OTHER
    */
   if (
-    destination ===
-    "other"
+    destination === "other"
   ) {
     if (
       typeof navigator !==
@@ -983,7 +1016,7 @@ export async function sharePreparedCatalogueDesktop({
         "function"
     ) {
       try {
-        const canFileShare =
+        const supported =
           typeof navigator.canShare !==
             "function" ||
           navigator.canShare({
@@ -991,16 +1024,16 @@ export async function sharePreparedCatalogueDesktop({
               prepared.files,
           });
 
-        if (
-          canFileShare
-        ) {
+        if (supported) {
           await navigator.share({
-            title:
-              prepared.title,
-            text:
-              prepared.details,
             files:
               prepared.files,
+
+            title:
+              prepared.title,
+
+            text:
+              prepared.details,
           });
 
           return true;
@@ -1036,8 +1069,7 @@ export async function sharePreparedCatalogueDesktop({
    * WHATSAPP
    */
   if (
-    destination ===
-    "whatsapp"
+    destination === "whatsapp"
   ) {
     prepared.files.forEach(
       (file, index) => {
@@ -1054,7 +1086,7 @@ export async function sharePreparedCatalogueDesktop({
         text:
           prepared.details,
       });
-    }, 500);
+    }, 600);
 
     return true;
   }
@@ -1084,32 +1116,26 @@ export async function shareCatalogue({
   }
 
   /*
-   * IMPORTANT:
-   *
-   * First use already-prepared cache.
-   * This is what allows the mobile
-   * button to call navigator.share()
-   * without doing image preparation
-   * after the user's tap.
+   * ALWAYS prefer already prepared
+   * catalogue files.
    */
-  const finalPrepared =
+  let finalPrepared =
     prepared ||
     getPreparedCatalogue(
       actualProduct
     );
 
   /*
-   * MOBILE
+   * MOBILE / NATIVE
    */
   if (
-    destination ===
-      "mobile" ||
-    destination ===
-      "other"
+    destination === "mobile"
   ) {
-    if (
-      finalPrepared
-    ) {
+    /*
+     * If files are ready,
+     * share them immediately.
+     */
+    if (finalPrepared) {
       return sharePreparedCatalogue({
         prepared:
           finalPrepared,
@@ -1117,81 +1143,57 @@ export async function shareCatalogue({
     }
 
     /*
-     * Legacy fallback.
-     *
-     * This is only used if preload
-     * hasn't completed yet.
+     * This should normally not happen
+     * because ShareCatalogueButton
+     * preloads the files.
      */
     try {
-      const fallbackPrepared =
+      finalPrepared =
         await prepareCatalogueShare({
           product:
             actualProduct,
         });
-
-      return sharePreparedCatalogue({
-        prepared:
-          fallbackPrepared,
-      });
     } catch (error) {
       console.error(
-        "Catalogue preparation failed:",
+        "Catalogue image preparation failed:",
         error
       );
 
-      /*
-       * Last-resort native text share.
-       * This ensures the mobile share
-       * sheet can still open even when
-       * image generation fails.
-       */
-      if (
-        typeof navigator !==
-          "undefined" &&
-        typeof navigator.share ===
-          "function"
-      ) {
-        try {
-          await navigator.share({
-            title:
-              actualProduct?.title ||
-              "SC Aura Kurtis",
-            text:
-              getProductDetails(
-                actualProduct
-              ),
-          });
+      return false;
+    }
 
-          return true;
-        } catch (shareError) {
-          if (
-            shareError?.name ===
-            "AbortError"
-          ) {
-            return false;
-          }
+    /*
+     * NEVER fall back to text-only share.
+     */
+    return sharePreparedCatalogue({
+      prepared:
+        finalPrepared,
+    });
+  }
 
-          console.error(
-            "Fallback mobile share failed:",
-            shareError
-          );
-        }
-      }
+  /*
+   * DESKTOP
+   */
+  if (!finalPrepared) {
+    try {
+      finalPrepared =
+        await prepareCatalogueShare({
+          product:
+            actualProduct,
+        });
+    } catch (error) {
+      console.error(
+        "Desktop catalogue preparation failed:",
+        error
+      );
 
       return false;
     }
   }
 
-  /*
-   * DESKTOP WHATSAPP
-   */
   return sharePreparedCatalogueDesktop({
     prepared:
-      finalPrepared ||
-      (await prepareCatalogueShare({
-        product:
-          actualProduct,
-      })),
+      finalPrepared,
     destination,
     phone,
   });
