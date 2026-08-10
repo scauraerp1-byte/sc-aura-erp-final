@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { GlassCard, Pill, SectionTitle } from "../components/Primitives";
 import { useAuth } from "../contexts/AuthContext";
 import {
+  Printer,
   Truck,
   ClipboardList,
   ArrowLeft,
@@ -34,15 +35,20 @@ export default function ProductDetail() {
 
         setP(r.data);
 
-        // QR encodes ONLY the SCA product ID.
-        const qr = await resolveProductQr(r.data);
+        try {
+          const qr = await resolveProductQr(r.data);
 
-        if (mounted) {
-          setQrDataUrl(qr);
+          if (mounted) {
+            setQrDataUrl(qr);
+          }
+        } catch (error) {
+          console.error("QR generation failed:", error);
         }
       })
       .catch(() => {
-        if (mounted) setP(null);
+        if (mounted) {
+          setP(null);
+        }
       });
 
     return () => {
@@ -55,9 +61,154 @@ export default function ProductDetail() {
     [p]
   );
 
+  /*
+   * PRINT PRODUCT QR
+   *
+   * This Print button is intentionally kept.
+   * It is for printing one product QR at a time.
+   */
+  const openPrint = () => {
+    if (!qrDataUrl || !p) return;
+
+    const win = window.open(
+      "",
+      "_blank",
+      "width=500,height=700"
+    );
+
+    if (!win) {
+      alert("Please allow pop-ups to print the QR label.");
+      return;
+    }
+
+    const safeTitle = String(
+      p.title || ""
+    ).replace(/[<>&"]/g, "");
+
+    const safeSr = String(
+      p.sr_number || ""
+    ).replace(/[<>&"]/g, "");
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${safeSr} - SC Aura Kurtis</title>
+
+          <style>
+            @page {
+              size: auto;
+              margin: 8mm;
+            }
+
+            * {
+              box-sizing: border-box;
+            }
+
+            html,
+            body {
+              margin: 0;
+              padding: 0;
+              background: #fff;
+              color: #111;
+              font-family: Arial, sans-serif;
+            }
+
+            body {
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .label {
+              width: 55mm;
+              padding: 5mm;
+              text-align: center;
+              background: #fff;
+            }
+
+            .brand {
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 2px;
+              margin-bottom: 3mm;
+            }
+
+            .qr {
+              width: 42mm;
+              height: 42mm;
+              object-fit: contain;
+              display: block;
+              margin: 0 auto;
+            }
+
+            .sr {
+              font-size: 13px;
+              font-weight: 700;
+              letter-spacing: 1.5px;
+              margin-top: 3mm;
+            }
+
+            .title {
+              font-size: 9px;
+              margin-top: 1.5mm;
+              color: #555;
+              line-height: 1.3;
+              max-width: 100%;
+              overflow: hidden;
+            }
+
+            @media print {
+              body {
+                min-height: auto;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          <div class="label">
+
+            <div class="brand">
+              SC AURA KURTIS
+            </div>
+
+            <img
+              class="qr"
+              src="${qrDataUrl}"
+              alt="QR Code"
+            />
+
+            <div class="sr">
+              ${safeSr}
+            </div>
+
+            <div class="title">
+              ${safeTitle}
+            </div>
+
+          </div>
+
+          <script>
+            window.onload = function () {
+              setTimeout(function () {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+
+    win.document.close();
+  };
+
   if (!p) {
     return (
-      <div className="h-64 rounded-2xl shimmer" />
+      <div className="w-full min-w-0">
+        <div className="h-64 rounded-2xl shimmer" />
+      </div>
     );
   }
 
@@ -70,17 +221,18 @@ export default function ProductDetail() {
         onClick={() => navigate(-1)}
         className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-4 h-4 shrink-0" />
         Back
       </button>
 
-      {/* MAIN PRODUCT GRID */}
+      {/* MAIN PRODUCT AREA */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 min-w-0">
 
-        {/* LEFT — IMAGES */}
+        {/* IMAGE AREA */}
         <div className="lg:col-span-3 space-y-4 min-w-0">
 
           <GlassCard className="p-3 sm:p-4 min-w-0 overflow-hidden">
+
             <div className="relative aspect-[4/5] rounded-xl overflow-hidden bg-white/5 min-w-0">
 
               {images[imgIdx] ? (
@@ -132,7 +284,7 @@ export default function ProductDetail() {
             </div>
 
             {images.length > 1 && (
-              <div className="mt-3 flex gap-2 overflow-x-auto scroll-hide max-w-full">
+              <div className="mt-3 flex gap-2 overflow-x-auto max-w-full">
                 {images.map((src, i) => (
                   <button
                     type="button"
@@ -159,10 +311,12 @@ export default function ProductDetail() {
                 ))}
               </div>
             )}
+
           </GlassCard>
 
           {/* STOCK */}
           <GlassCard className="min-w-0 overflow-hidden">
+
             <SectionTitle
               overline="Stock by size"
               title="Inventory map"
@@ -186,10 +340,12 @@ export default function ProductDetail() {
                 </div>
               ))}
             </div>
+
           </GlassCard>
+
         </div>
 
-        {/* RIGHT — DETAILS */}
+        {/* DETAILS AREA */}
         <div className="lg:col-span-2 space-y-4 min-w-0">
 
           <GlassCard className="min-w-0 overflow-hidden">
@@ -202,7 +358,7 @@ export default function ProductDetail() {
                   {p.sr_number}
                 </div>
 
-                <h1 className="font-display text-2xl tracking-tight mt-1 truncate">
+                <h1 className="font-display text-2xl tracking-tight mt-1 break-words">
                   {p.title}
                 </h1>
               </div>
@@ -218,6 +374,7 @@ export default function ProductDetail() {
                   </Pill>
                 </div>
               )}
+
             </div>
 
             {/* DESCRIPTION */}
@@ -227,8 +384,9 @@ export default function ProductDetail() {
               </p>
             )}
 
-            {/* PRODUCT TAGS */}
+            {/* TAGS */}
             <div className="flex flex-wrap gap-2 mt-3 min-w-0">
+
               <Pill tone="neutral">
                 {p.category}
               </Pill>
@@ -248,6 +406,7 @@ export default function ProductDetail() {
               >
                 {p.quantity} pcs
               </Pill>
+
             </div>
 
             {/* PRICE */}
@@ -270,6 +429,7 @@ export default function ProductDetail() {
               (p.factory_name ||
                 p.vendor_name) && (
                 <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 min-w-0 overflow-hidden">
+
                   <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
                     Vendor / Factory (internal)
                   </div>
@@ -278,6 +438,7 @@ export default function ProductDetail() {
                     {p.vendor_name ||
                       p.factory_name}
                   </div>
+
                 </div>
               )}
 
@@ -293,6 +454,7 @@ export default function ProductDetail() {
                 className="min-w-0 overflow-hidden rounded-full glass px-2 sm:px-4 py-2.5 text-[10px] sm:text-xs uppercase tracking-[0.10em] sm:tracking-[0.18em] inline-flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-white/10 whitespace-nowrap"
               >
                 <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+
                 <span className="truncate">
                   Book
                 </span>
@@ -307,6 +469,7 @@ export default function ProductDetail() {
                 className="min-w-0 overflow-hidden btn-primary rounded-full px-2 sm:px-4 py-2.5 text-[10px] sm:text-xs uppercase tracking-[0.10em] sm:tracking-[0.20em] inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
               >
                 <Truck className="w-3.5 h-3.5 shrink-0" />
+
                 <span className="truncate">
                   Dispatch
                 </span>
@@ -337,6 +500,7 @@ export default function ProductDetail() {
                   className="min-w-0 overflow-hidden rounded-full glass px-2 sm:px-4 py-2.5 text-[10px] sm:text-xs uppercase tracking-[0.10em] sm:tracking-[0.18em] inline-flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-white/10 whitespace-nowrap"
                 >
                   <Pencil className="w-3.5 h-3.5 shrink-0" />
+
                   <span className="truncate">
                     Edit
                   </span>
@@ -344,18 +508,31 @@ export default function ProductDetail() {
               )}
 
             </div>
+
           </GlassCard>
 
-          {/* QR CODE — PRINT BUTTON REMOVED */}
+          {/* QR CODE + PRINT */}
           {qrDataUrl && (
             <GlassCard className="min-w-0 overflow-hidden">
 
               <SectionTitle
                 overline="Label"
                 title="QR Code"
+                action={
+                  <button
+                    type="button"
+                    onClick={openPrint}
+                    data-testid="prod-qr-print"
+                    className="text-xs inline-flex items-center gap-1 hover:opacity-80 shrink-0"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print
+                  </button>
+                }
               />
 
               <div className="bg-white rounded-xl p-4 mx-auto max-w-[220px] shadow-inner">
+
                 <img
                   src={qrDataUrl}
                   alt={`QR for ${p.sr_number}`}
@@ -363,6 +540,7 @@ export default function ProductDetail() {
                 />
 
                 <div className="text-center mt-2 font-mono-receipt text-black">
+
                   <div className="text-xs font-semibold tracking-wider">
                     {p.sr_number}
                   </div>
@@ -370,6 +548,7 @@ export default function ProductDetail() {
                   <div className="text-[10px] uppercase tracking-[0.18em] text-black/60 truncate">
                     {p.title}
                   </div>
+
                 </div>
               </div>
 
