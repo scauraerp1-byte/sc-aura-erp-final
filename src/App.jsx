@@ -97,6 +97,7 @@ function App() {
                 {/* Dispatch */}
                 <Route path="/dispatch" element={<Shell><Dispatch /></Shell>} />
                 <Route path="/dispatch/new" element={<Shell><DispatchForm /></Shell>} />
+                <Route path="/dispatch/:id" element={<Shell><DispatchDetail /></Shell>} />
 
                 {/* Estimates */}
                 <Route path="/estimates" element={<Shell><EstimatesList /></Shell>} />
