@@ -1,25 +1,26 @@
 /**
  * SC AURA ERP
- * Catalogue / WhatsApp Sharing
+ * Catalogue / WhatsApp / Native Sharing
  *
- * Catalogue flow:
- * Share This Piece
- *      ↓
- * Where do you want to share?
- *      ↓
- * WhatsApp / Other
+ * MOBILE:
+ *   Share Catalogue
+ *        ↓
+ *   Native Android / iPhone Share Sheet
+ *        ↓
+ *   WhatsApp / Instagram / Gmail / etc.
  *
- * WhatsApp:
- * - Actual product image file
- * - SCA code printed BELOW image
- * - SCA code LEFT aligned
- * - Product details
- * - NO catalogue URL
- * - NO View catalogue link
+ * DESKTOP:
+ *   Share Catalogue
+ *        ↓
+ *   WhatsApp / Other chooser
  *
- * Other:
- * - Native device share when supported
- * - Otherwise downloads the generated images
+ * Shared files:
+ *   - Actual product image
+ *   - SCA code below image
+ *   - SCA code left aligned
+ *   - Product details
+ *   - NO catalogue URL
+ *   - NO View catalogue link
  */
 
 /* =========================================================
@@ -33,36 +34,20 @@ const cleanPhone = (p) =>
 
 /* =========================================================
    NORMAL WHATSAPP TEXT SHARE
- *
- * Kept for existing enquiry / other
- * parts of ERP.
 ========================================================= */
 
-export function whatsappUrl(
-  phone,
-  text
-) {
-  const target =
-    cleanPhone(phone);
+export function whatsappUrl(phone, text) {
+  const target = cleanPhone(phone);
 
   const base = target
     ? `https://wa.me/${target}`
     : "https://wa.me/";
 
-  return `${base}?text=${encodeURIComponent(
-    text || ""
-  )}`;
+  return `${base}?text=${encodeURIComponent(text || "")}`;
 }
 
-export function shareWhatsApp({
-  phone,
-  text,
-}) {
-  const url =
-    whatsappUrl(
-      phone,
-      text
-    );
+export function shareWhatsApp({ phone, text }) {
+  const url = whatsappUrl(phone, text);
 
   window.open(
     url,
@@ -73,9 +58,6 @@ export function shareWhatsApp({
 
 /* =========================================================
    NORMAL PAGE SHARE
- *
- * Kept for any other existing
- * page-sharing functionality.
 ========================================================= */
 
 export async function sharePage({
@@ -85,7 +67,8 @@ export async function sharePage({
   phone,
 }) {
   if (
-    navigator.share
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function"
   ) {
     try {
       await navigator.share({
@@ -100,10 +83,9 @@ export async function sharePage({
     }
   }
 
-  const fullText =
-    url
-      ? `${text || ""}\n${url}`
-      : text || "";
+  const fullText = url
+    ? `${text || ""}\n${url}`
+    : text || "";
 
   shareWhatsApp({
     phone,
@@ -117,18 +99,12 @@ export async function sharePage({
    IMAGE SOURCE
 ========================================================= */
 
-function getProductImages(
-  product
-) {
+function getProductImages(product) {
   if (
-    Array.isArray(
-      product?.images
-    ) &&
+    Array.isArray(product?.images) &&
     product.images.length
   ) {
-    return product.images.filter(
-      Boolean
-    );
+    return product.images.filter(Boolean);
   }
 
   const single =
@@ -149,41 +125,27 @@ function getProductImages(
 
 /* =========================================================
    SCA CODE
- *
- * FULL CODE:
- *
- * 0017       -> SCA-0017
- * SCA-0017  -> SCA-0017
- * SCA-00017 -> SCA-00017
 ========================================================= */
 
-function getScaCode(
-  product
-) {
-  const raw =
-    String(
-      product?.sr_number ||
-        product?.sca_code ||
-        product?.sku ||
-        product?.code ||
-        product?.product_code ||
-        ""
-    ).trim();
+function getScaCode(product) {
+  const raw = String(
+    product?.sr_number ||
+      product?.sca_code ||
+      product?.sku ||
+      product?.code ||
+      product?.product_code ||
+      ""
+  ).trim();
 
   if (!raw) {
     return "";
   }
 
-  if (
-    /^SCA-/i.test(raw)
-  ) {
+  if (/^SCA-/i.test(raw)) {
     return raw.toUpperCase();
   }
 
-  const match =
-    raw.match(
-      /(\d+)$/
-    );
+  const match = raw.match(/(\d+)$/);
 
   if (match) {
     return `SCA-${match[1]}`;
@@ -196,51 +158,28 @@ function getScaCode(
    IMAGE LOADER
 ========================================================= */
 
-async function loadImageSource(
-  source
-) {
+async function loadImageSource(source) {
   if (!source) {
     throw new Error(
       "Product image is missing."
     );
   }
 
-  /*
-   * Already a data URL.
-   */
   if (
-    typeof source ===
-      "string" &&
-    source.startsWith(
-      "data:image/"
-    )
+    typeof source === "string" &&
+    source.startsWith("data:image/")
   ) {
     return source;
   }
 
-  /*
-   * Blob URL.
-   */
   if (
-    typeof source ===
-      "string" &&
-    source.startsWith(
-      "blob:"
-    )
+    typeof source === "string" &&
+    source.startsWith("blob:")
   ) {
     return source;
   }
 
-  /*
-   * Fetch image as blob.
-   *
-   * For public catalogue images,
-   * browser CORS must allow this.
-   */
-  const response =
-    await fetch(
-      source
-    );
+  const response = await fetch(source);
 
   if (!response.ok) {
     throw new Error(
@@ -248,34 +187,23 @@ async function loadImageSource(
     );
   }
 
-  const blob =
-    await response.blob();
+  const blob = await response.blob();
 
-  return URL.createObjectURL(
-    blob
-  );
+  return URL.createObjectURL(blob);
 }
 
 /* =========================================================
    LOAD HTML IMAGE
 ========================================================= */
 
-function loadHtmlImage(
-  source
-) {
+function loadHtmlImage(source) {
   return new Promise(
-    (
-      resolve,
-      reject
-    ) => {
-      const img =
-        new Image();
+    (resolve, reject) => {
+      const img = new Image();
 
-      img.crossOrigin =
-        "anonymous";
+      img.crossOrigin = "anonymous";
 
-      img.onload = () =>
-        resolve(img);
+      img.onload = () => resolve(img);
 
       img.onerror = () =>
         reject(
@@ -284,8 +212,7 @@ function loadHtmlImage(
           )
         );
 
-      img.src =
-        source;
+      img.src = source;
     }
   );
 }
@@ -294,9 +221,9 @@ function loadHtmlImage(
    CREATE SHARE IMAGE
  *
  * Product image
- *      ↓
+ *       ↓
  * white code strip
- *      ↓
+ *       ↓
  * SCA-00017 LEFT
 ========================================================= */
 
@@ -309,18 +236,13 @@ async function createCatalogueImage(
       imageSource
     );
 
-  let objectUrl =
-    null;
+  let objectUrl = null;
 
   if (
-    typeof source ===
-      "string" &&
-    source.startsWith(
-      "blob:"
-    )
+    typeof source === "string" &&
+    source.startsWith("blob:")
   ) {
-    objectUrl =
-      source;
+    objectUrl = source;
   }
 
   try {
@@ -329,12 +251,7 @@ async function createCatalogueImage(
         source
       );
 
-    /*
-     * Keep good quality without
-     * making enormous files.
-     */
-    const MAX_WIDTH =
-      1400;
+    const MAX_WIDTH = 1400;
 
     const originalWidth =
       img.naturalWidth ||
@@ -346,19 +263,16 @@ async function createCatalogueImage(
       img.height ||
       1000;
 
-    const scale =
-      Math.min(
-        1,
-        MAX_WIDTH /
-          originalWidth
-      );
+    const scale = Math.min(
+      1,
+      MAX_WIDTH / originalWidth
+    );
 
     const width =
       Math.max(
         1,
         Math.round(
-          originalWidth *
-            scale
+          originalWidth * scale
         )
       );
 
@@ -366,20 +280,18 @@ async function createCatalogueImage(
       Math.max(
         1,
         Math.round(
-          originalHeight *
-            scale
+          originalHeight * scale
         )
       );
 
     /*
-     * Code strip height.
+     * Small clean strip.
      */
     const stripHeight =
       Math.max(
-        65,
+        58,
         Math.round(
-          width *
-            0.06
+          width * 0.045
         )
       );
 
@@ -388,8 +300,7 @@ async function createCatalogueImage(
         "canvas"
       );
 
-    canvas.width =
-      width;
+    canvas.width = width;
 
     canvas.height =
       imageHeight +
@@ -407,10 +318,9 @@ async function createCatalogueImage(
     }
 
     /*
-     * White background.
+     * White background
      */
-    ctx.fillStyle =
-      "#ffffff";
+    ctx.fillStyle = "#ffffff";
 
     ctx.fillRect(
       0,
@@ -420,7 +330,7 @@ async function createCatalogueImage(
     );
 
     /*
-     * Product image.
+     * Product image
      */
     ctx.drawImage(
       img,
@@ -431,10 +341,9 @@ async function createCatalogueImage(
     );
 
     /*
-     * Code strip.
+     * Code strip
      */
-    ctx.fillStyle =
-      "#ffffff";
+    ctx.fillStyle = "#ffffff";
 
     ctx.fillRect(
       0,
@@ -444,46 +353,39 @@ async function createCatalogueImage(
     );
 
     /*
-     * FULL SCA CODE
-     *
-     * LEFT ALIGNED.
+     * SCA CODE
+     * LEFT ALIGNED
      */
     ctx.fillStyle =
       "#111111";
 
     ctx.font =
       `700 ${Math.max(
-        30,
+        26,
         Math.round(
-          width *
-            0.038
+          width * 0.032
         )
       )}px Arial, sans-serif`;
 
-    ctx.textAlign =
-      "left";
+    ctx.textAlign = "left";
 
-    ctx.textBaseline =
-      "middle";
+    ctx.textBaseline = "middle";
 
     ctx.fillText(
       scaCode,
       Math.round(
-        width *
-          0.025
+        width * 0.025
       ),
       imageHeight +
         stripHeight / 2
     );
 
     /*
-     * Convert to JPEG.
+     * JPEG
      */
     const blob =
       await new Promise(
-        (
-          resolve
-        ) => {
+        (resolve) => {
           canvas.toBlob(
             resolve,
             "image/jpeg",
@@ -500,12 +402,7 @@ async function createCatalogueImage(
 
     return blob;
   } finally {
-    /*
-     * Revoke generated blob URL.
-     */
-    if (
-      objectUrl
-    ) {
+    if (objectUrl) {
       URL.revokeObjectURL(
         objectUrl
       );
@@ -517,24 +414,18 @@ async function createCatalogueImage(
    PRODUCT DETAILS
 ========================================================= */
 
-function getProductDetails(
-  product
-) {
+function getProductDetails(product) {
   const sca =
-    getScaCode(
-      product
-    );
+    getScaCode(product);
 
   const title =
     String(
-      product?.title ||
-        ""
+      product?.title || ""
     ).trim();
 
   const category =
     String(
-      product?.category ||
-        ""
+      product?.category || ""
     ).trim();
 
   const price =
@@ -560,13 +451,10 @@ function getProductDetails(
         ""
     ).trim();
 
-  const lines =
-    [];
+  const lines = [];
 
   if (sca) {
-    lines.push(
-      sca
-    );
+    lines.push(sca);
   }
 
   if (title) {
@@ -588,9 +476,7 @@ function getProductDetails(
   }
 
   if (
-    Number.isFinite(
-      price
-    ) &&
+    Number.isFinite(price) &&
     price > 0
   ) {
     lines.push(
@@ -606,9 +492,7 @@ function getProductDetails(
     );
   }
 
-  return lines.join(
-    "\n"
-  );
+  return lines.join("\n");
 }
 
 /* =========================================================
@@ -629,11 +513,9 @@ function downloadBlob(
       "a"
     );
 
-  anchor.href =
-    url;
+  anchor.href = url;
 
-  anchor.download =
-    filename;
+  anchor.download = filename;
 
   document.body.appendChild(
     anchor
@@ -654,9 +536,119 @@ function downloadBlob(
 }
 
 /* =========================================================
-   MAIN CATALOGUE SHARE
+   MOBILE DETECTION
+========================================================= */
+
+function isMobileDevice() {
+  if (
+    typeof navigator ===
+    "undefined"
+  ) {
+    return false;
+  }
+
+  const userAgent =
+    navigator.userAgent ||
+    navigator.vendor ||
+    window.opera ||
+    "";
+
+  return /android|iphone|ipad|ipod|mobile/i.test(
+    userAgent
+  );
+}
+
+/* =========================================================
+   NATIVE FILE SHARE
  *
- * Called by PublicCatalogue.
+ * Opens the ACTUAL phone share sheet.
+========================================================= */
+
+async function nativeFileShare({
+  files,
+  details,
+  title,
+}) {
+  if (
+    typeof navigator ===
+      "undefined" ||
+    typeof navigator.share !==
+      "function"
+  ) {
+    return false;
+  }
+
+  /*
+   * First try files.
+   *
+   * Do NOT require canShare().
+   * Some mobile browsers implement
+   * file sharing but return unreliable
+   * canShare results.
+   */
+  try {
+    await navigator.share({
+      title:
+        title ||
+        "SC Aura Kurtis",
+      text: details,
+      files,
+    });
+
+    return true;
+  } catch (error) {
+    /*
+     * User cancelled.
+     */
+    if (
+      error?.name ===
+      "AbortError"
+    ) {
+      return false;
+    }
+
+    console.warn(
+      "Native file share failed:",
+      error
+    );
+  }
+
+  /*
+   * Second attempt:
+   * native share sheet without files.
+   *
+   * This makes sure mobile still
+   * gets the system share sheet if
+   * the browser refuses file sharing.
+   */
+  try {
+    await navigator.share({
+      title:
+        title ||
+        "SC Aura Kurtis",
+      text: details,
+    });
+
+    return true;
+  } catch (error) {
+    if (
+      error?.name ===
+      "AbortError"
+    ) {
+      return false;
+    }
+
+    console.warn(
+      "Native text share failed:",
+      error
+    );
+  }
+
+  return false;
+}
+
+/* =========================================================
+   MAIN CATALOGUE SHARE
 ========================================================= */
 
 export async function shareCatalogue({
@@ -684,9 +676,7 @@ export async function shareCatalogue({
   }
 
   const sca =
-    getScaCode(
-      product
-    );
+    getScaCode(product);
 
   if (!sca) {
     throw new Error(
@@ -700,8 +690,7 @@ export async function shareCatalogue({
    * =======================================================
    */
 
-  const files =
-    [];
+  const files = [];
 
   for (
     let i = 0;
@@ -719,20 +708,33 @@ export async function shareCatalogue({
         [blob],
         `${sca}-${i + 1}.jpg`,
         {
-          type:
-            "image/jpeg",
+          type: "image/jpeg",
         }
       );
 
-    files.push(
-      file
-    );
+    files.push(file);
   }
 
   const details =
     getProductDetails(
       product
     );
+
+  /* =======================================================
+     MOBILE NATIVE SHARE
+  ======================================================= */
+
+  if (
+    destination === "mobile"
+  ) {
+    return await nativeFileShare({
+      files,
+      details,
+      title:
+        product?.title ||
+        "SC Aura Kurtis",
+    });
+  }
 
   /* =======================================================
      WHATSAPP
@@ -743,65 +745,26 @@ export async function shareCatalogue({
     "whatsapp"
   ) {
     /*
-     * IMPORTANT:
-     *
-     * WhatsApp Web cannot accept
-     * file attachments through a
-     * wa.me URL.
-     *
-     * On devices supporting native
-     * file sharing, this opens the
-     * native share sheet with actual
-     * image files.
+     * On mobile:
+     * open actual native share sheet.
      */
-
     if (
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({
-        files,
-      })
+      isMobileDevice()
     ) {
-      try {
-        await navigator.share({
-          title:
-            product?.title ||
-            "SC Aura Kurtis",
-
-          text:
-            details,
-
-          files,
-        });
-
-        return true;
-      } catch (
-        error
-      ) {
-        /*
-         * User cancelled.
-         */
-        if (
-          error?.name ===
-          "AbortError"
-        ) {
-          return false;
-        }
-
-        console.warn(
-          "Native image share failed:",
-          error
-        );
-      }
+      return await nativeFileShare({
+        files,
+        details,
+        title:
+          product?.title ||
+          "SC Aura Kurtis",
+      });
     }
 
     /*
-     * Desktop fallback:
-     *
-     * Generate/download actual images
-     * and open WhatsApp with DETAILS
-     *
-     * NO CATALOGUE URL.
+     * Desktop:
+     * download generated images,
+     * then open WhatsApp with
+     * product details only.
      */
     files.forEach(
       (
@@ -815,10 +778,6 @@ export async function shareCatalogue({
       }
     );
 
-    /*
-     * Give browser a moment to
-     * start downloads.
-     */
     await new Promise(
       (resolve) =>
         setTimeout(
@@ -840,52 +799,30 @@ export async function shareCatalogue({
   ======================================================= */
 
   if (
-    destination ===
-    "other"
+    destination === "other"
   ) {
     /*
-     * Native share with files.
+     * Desktop and mobile native
+     * share when available.
      */
     if (
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({
-        files,
-      })
+      typeof navigator !==
+        "undefined" &&
+      typeof navigator.share ===
+        "function"
     ) {
-      try {
-        await navigator.share({
-          title:
-            product?.title ||
-            "SC Aura Kurtis",
-
-          text:
-            details,
-
-          files,
-        });
-
-        return true;
-      } catch (
-        error
-      ) {
-        if (
-          error?.name ===
-          "AbortError"
-        ) {
-          return false;
-        }
-
-        console.warn(
-          "Native share failed:",
-          error
-        );
-      }
+      return await nativeFileShare({
+        files,
+        details,
+        title:
+          product?.title ||
+          "SC Aura Kurtis",
+      });
     }
 
     /*
-     * If native share isn't available,
-     * download images.
+     * No native share:
+     * download files.
      */
     files.forEach(
       (
@@ -908,11 +845,10 @@ export async function shareCatalogue({
 /* =========================================================
    PUBLIC URL HELPERS
  *
- * Kept because other ERP parts
- * may still use these.
+ * Kept for existing ERP functionality.
  *
- * Catalogue sharing DOES NOT use
- * publicCatalogueUrl().
+ * Catalogue sharing itself DOES NOT
+ * use these URLs.
 ========================================================= */
 
 export function publicCatalogueUrl(
@@ -937,9 +873,7 @@ export function publicDispatchUrl(
    RUPEE
 ========================================================= */
 
-export function formatRupee(
-  n
-) {
+export function formatRupee(n) {
   return `Rs. ${Number(
     n || 0
   ).toLocaleString(
