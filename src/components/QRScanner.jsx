@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { X, Camera, Type, Search, Loader2, Package } from "lucide-react";
+import {
+  X,
+  Type,
+  Search,
+  Loader2,
+  Package,
+} from "lucide-react";
 import { useBodyLock } from "../hooks/useBodyLock";
 import useEscapeClose from "../hooks/useEscapeClose";
 import api from "../lib/api";
 
-/**
- * QR Scanner modal.
- *
- * Features:
- * - Camera QR scanning
- * - Manual SR search
- * - Type "SCA" and matching products appear
- * - Tap a product to continue
- * - Camera failure gracefully falls back to manual search
- */
-export default function QRScanner({ open, onClose, onScan }) {
+export default function QRScanner({
+  open,
+  onClose,
+  onScan,
+}) {
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
 
@@ -40,13 +40,13 @@ export default function QRScanner({ open, onClose, onScan }) {
     setSearchResults([]);
     setSearching(false);
 
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (cancelled) return;
 
       const id = "qr-scanner-region";
-      const elem = document.getElementById(id);
+      const element = document.getElementById(id);
 
-      if (!elem) return;
+      if (!element) return;
 
       const scanner = new Html5Qrcode(id);
       scannerRef.current = scanner;
@@ -57,9 +57,10 @@ export default function QRScanner({ open, onClose, onScan }) {
           {
             fps: 10,
             qrbox: {
-              width: 240,
-              height: 240,
+              width: 220,
+              height: 220,
             },
+            aspectRatio: 1,
           },
           (text) => {
             try {
@@ -85,18 +86,19 @@ export default function QRScanner({ open, onClose, onScan }) {
             );
           }
         });
-    }, 30);
+    }, 80);
 
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
 
-      const s = scannerRef.current;
+      const scanner = scannerRef.current;
 
-      if (s) {
+      if (scanner) {
         try {
-          s.stop()
-            .then(() => s.clear())
+          scanner
+            .stop()
+            .then(() => scanner.clear())
             .catch(() => {});
         } catch {}
       }
@@ -106,23 +108,16 @@ export default function QRScanner({ open, onClose, onScan }) {
   }, [open, onScan]);
 
   /*
-   * MANUAL SR SEARCH
-   *
-   * Type:
-   * SCA
-   * SCA-0
-   * SCA-00017
-   *
-   * and matching products will appear.
+   * MANUAL SEARCH
    */
   useEffect(() => {
     if (!open) return;
 
-    const q = manual.trim().toUpperCase();
+    const query = manual.trim().toUpperCase();
 
     setSearchResults([]);
 
-    if (q.length < 2) {
+    if (query.length < 2) {
       setSearching(false);
       return;
     }
@@ -130,6 +125,8 @@ export default function QRScanner({ open, onClose, onScan }) {
     let cancelled = false;
 
     const timer = setTimeout(async () => {
+      if (cancelled) return;
+
       setSearching(true);
 
       try {
@@ -137,7 +134,7 @@ export default function QRScanner({ open, onClose, onScan }) {
           "/products",
           {
             params: {
-              q,
+              q: query,
             },
           }
         );
@@ -178,21 +175,21 @@ export default function QRScanner({ open, onClose, onScan }) {
     );
   };
 
-  const submitManual = (e) => {
-    e.preventDefault();
+  const submitManual = (event) => {
+    event.preventDefault();
 
-    const v = manual.trim().toUpperCase();
+    const value = manual.trim().toUpperCase();
 
-    if (v) {
-      onScan?.(v);
+    if (value) {
+      onScan?.(value);
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm grid place-items-center p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
+      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
           onClose?.();
         }
       }}
@@ -200,15 +197,36 @@ export default function QRScanner({ open, onClose, onScan }) {
       aria-modal="true"
       aria-label="Scan Product QR"
     >
-      <div className="w-full max-w-md max-h-[92dvh] overflow-hidden rounded-2xl border border-white/15 bg-[#11151d] text-white shadow-2xl">
+      <div
+        className="w-full max-w-md rounded-2xl border border-white/15 shadow-2xl overflow-hidden"
+        style={{
+          background: "#11151d",
+          color: "#ffffff",
+          maxHeight: "88dvh",
+        }}
+      >
         {/* HEADER */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b"
+          style={{
+            borderColor: "rgba(255,255,255,0.12)",
+          }}
+        >
           <div>
-            <div className="text-[10px] uppercase tracking-[0.28em] text-[#ebd281]">
+            <div
+              className="text-[10px] uppercase tracking-[0.28em]"
+              style={{ color: "#d4af37" }}
+            >
               QR / SR Scanner
             </div>
 
-            <div className="font-display text-xl mt-0.5 text-white">
+            <div
+              className="font-display text-xl mt-1"
+              style={{
+                color: "#ffffff",
+                opacity: 1,
+              }}
+            >
               Scan Product QR
             </div>
           </div>
@@ -217,118 +235,261 @@ export default function QRScanner({ open, onClose, onScan }) {
             type="button"
             onClick={onClose}
             aria-label="Close scanner"
-            className="w-9 h-9 rounded-full grid place-items-center bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+            className="w-10 h-10 rounded-full grid place-items-center border transition"
+            style={{
+              background: "#ffffff",
+              borderColor: "#ffffff",
+              color: "#11151d",
+            }}
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="max-h-[calc(92dvh-80px)] overflow-y-auto p-4">
+        {/* CONTENT */}
+        <div
+          className="p-4"
+          style={{
+            maxHeight: "calc(88dvh - 78px)",
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
           {/* CAMERA */}
           <div
             id="qr-scanner-region"
             ref={containerRef}
-            className="w-full overflow-hidden rounded-xl border border-white/10 bg-black aspect-square max-h-[48dvh]"
+            className="w-full overflow-hidden rounded-xl border bg-black"
+            style={{
+              height: "min(48vw, 260px)",
+              minHeight: "210px",
+              borderColor:
+                "rgba(255,255,255,0.15)",
+            }}
           />
 
           {error && (
-            <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <div
+              className="mt-3 rounded-xl px-3 py-2.5 text-xs"
+              style={{
+                background:
+                  "rgba(245,158,11,0.10)",
+                border:
+                  "1px solid rgba(245,158,11,0.25)",
+                color: "#fde68a",
+              }}
+            >
               {error}
             </div>
           )}
 
-          {/* MANUAL SEARCH */}
-          <form
-            onSubmit={submitManual}
-            className="mt-4"
+          {/* SEARCH LABEL */}
+          <div
+            className="text-[10px] uppercase tracking-[0.22em] mt-4 mb-2"
+            style={{
+              color: "rgba(255,255,255,0.50)",
+            }}
           >
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/45 mb-2">
-              Or search by SR
-            </div>
+            Or Search By SR
+          </div>
 
+          {/* SEARCH INPUT */}
+          <form onSubmit={submitManual}>
             <div className="relative">
-              <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/45" />
+              <Type
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                style={{
+                  color: "rgba(255,255,255,0.55)",
+                }}
+              />
 
               <input
                 autoFocus={!!error}
                 value={manual}
-                onChange={(e) =>
+                onChange={(event) =>
                   setManual(
-                    e.target.value.toUpperCase()
+                    event.target.value.toUpperCase()
                   )
                 }
                 placeholder="Type SCA or SCA-00017"
-                className="w-full h-11 rounded-xl bg-white/[0.06] border border-white/10 text-white placeholder:text-white/35 px-10 pr-10 outline-none focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 uppercase font-mono-receipt"
                 data-testid="qr-manual-input"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full h-12 rounded-xl pl-10 pr-10 outline-none font-mono-receipt uppercase"
+                style={{
+                  background: "#20252d",
+                  color: "#ffffff",
+                  caretColor: "#ebd281",
+                  border:
+                    "1px solid rgba(255,255,255,0.18)",
+                  boxShadow:
+                    "inset 0 0 0 1px rgba(0,0,0,0.15)",
+                }}
+                onFocus={(event) => {
+                  event.currentTarget.style.border =
+                    "1px solid #d4af37";
+                  event.currentTarget.style.boxShadow =
+                    "0 0 0 2px rgba(212,175,55,0.18)";
+                }}
+                onBlur={(event) => {
+                  event.currentTarget.style.border =
+                    "1px solid rgba(255,255,255,0.18)";
+                  event.currentTarget.style.boxShadow =
+                    "inset 0 0 0 1px rgba(0,0,0,0.15)";
+                }}
               />
 
               {searching && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#ebd281] animate-spin" />
+                <Loader2
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin"
+                  style={{
+                    color: "#d4af37",
+                  }}
+                />
               )}
             </div>
           </form>
 
-          {/* SEARCH RESULTS */}
+          {/* MATCHING PRODUCTS */}
           {manual.trim().length >= 2 && (
             <div className="mt-3">
+              <div
+                className="text-[10px] uppercase tracking-[0.22em] px-1 mb-2"
+                style={{
+                  color:
+                    "rgba(255,255,255,0.48)",
+                }}
+              >
+                Matching Products
+              </div>
+
               {searchResults.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="text-[9px] uppercase tracking-[0.2em] text-white/40 px-1">
-                    Matching products
-                  </div>
+                <div
+                  className="space-y-2"
+                  style={{
+                    maxHeight: "300px",
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                    paddingRight: "2px",
+                  }}
+                >
+                  {searchResults.map(
+                    (product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() =>
+                          selectProduct(product)
+                        }
+                        className="w-full flex items-center gap-3 rounded-xl text-left transition active:scale-[0.99]"
+                        style={{
+                          background: "#f8fafc",
+                          color: "#111827",
+                          border:
+                            "1px solid #e5e7eb",
+                          padding: "10px 12px",
+                        }}
+                      >
+                        {/* IMAGE */}
+                        <div
+                          className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0"
+                          style={{
+                            background: "#e5e7eb",
+                            border:
+                              "1px solid #d1d5db",
+                          }}
+                        >
+                          {product.images?.[0] ? (
+                            <img
+                              src={product.images[0]}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center">
+                              <Package
+                                className="w-5 h-5"
+                                style={{
+                                  color:
+                                    "#9ca3af",
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
 
-                  {searchResults.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() =>
-                        selectProduct(product)
-                      }
-                      className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left hover:bg-white/[0.09] active:scale-[0.99] transition"
-                    >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex-shrink-0">
-                        {product.images?.[0] ? (
-                          <img
-                            src={product.images[0]}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center">
-                            <Package className="w-5 h-5 text-white/25" />
+                        {/* INFO */}
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="text-[10px] font-mono-receipt font-semibold"
+                            style={{
+                              color: "#a17b05",
+                            }}
+                          >
+                            {product.sr_number}
                           </div>
-                        )}
-                      </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[10px] font-mono-receipt text-[#ebd281]">
-                          {product.sr_number}
+                          <div
+                            className="text-sm font-medium truncate mt-0.5"
+                            style={{
+                              color: "#111827",
+                            }}
+                          >
+                            {product.title}
+                          </div>
+
+                          <div
+                            className="text-[10px] mt-1"
+                            style={{
+                              color: "#6b7280",
+                            }}
+                          >
+                            {product.category || ""}
+                            {product.size_preset
+                              ? ` · ${product.size_preset}`
+                              : ""}
+                          </div>
                         </div>
 
-                        <div className="text-sm font-medium text-white truncate mt-0.5">
-                          {product.title}
-                        </div>
-
-                        <div className="text-[10px] text-white/45 mt-1">
-                          {product.category || ""}
-                          {product.size_preset
-                            ? ` · ${product.size_preset}`
-                            : ""}
-                        </div>
-                      </div>
-
-                      <Search className="w-4 h-4 text-white/30 flex-shrink-0" />
-                    </button>
-                  ))}
+                        <Search
+                          className="w-5 h-5 flex-shrink-0"
+                          style={{
+                            color: "#9ca3af",
+                          }}
+                        />
+                      </button>
+                    )
+                  )}
                 </div>
               ) : (
                 !searching && (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 text-center">
-                    <div className="text-sm text-white/65">
+                  <div
+                    className="rounded-xl px-4 py-5 text-center"
+                    style={{
+                      background:
+                        "rgba(255,255,255,0.04)",
+                      border:
+                        "1px solid rgba(255,255,255,0.10)",
+                    }}
+                  >
+                    <div
+                      className="text-sm"
+                      style={{
+                        color:
+                          "rgba(255,255,255,0.70)",
+                      }}
+                    >
                       No product found
                     </div>
 
-                    <div className="text-[10px] text-white/35 mt-1">
+                    <div
+                      className="text-[10px] mt-1"
+                      style={{
+                        color:
+                          "rgba(255,255,255,0.35)",
+                      }}
+                    >
                       Try another SR number.
                     </div>
                   </div>
@@ -337,20 +498,37 @@ export default function QRScanner({ open, onClose, onScan }) {
             </div>
           )}
 
-          {/* EXACT CODE BUTTON */}
+          {/* EXACT CODE */}
           <button
             type="button"
             onClick={submitManual}
             disabled={!manual.trim()}
             data-testid="qr-manual-submit"
-            className="btn-primary w-full mt-3 rounded-full py-2.5 text-xs uppercase tracking-[0.2em] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full rounded-full py-2.5 mt-3 text-xs uppercase tracking-[0.2em] font-medium transition"
+            style={{
+              background: manual.trim()
+                ? "#ffffff"
+                : "rgba(255,255,255,0.08)",
+              color: manual.trim()
+                ? "#11151d"
+                : "rgba(255,255,255,0.30)",
+              cursor: manual.trim()
+                ? "pointer"
+                : "not-allowed",
+            }}
           >
-            Use this code
+            Use This Code
           </button>
 
-          <div className="text-[11px] text-white/40 mt-3 text-center">
-            Point the camera at the QR label or type
-            an SR number such as SCA-00017.
+          <div
+            className="text-[10px] text-center mt-3 pb-1"
+            style={{
+              color:
+                "rgba(255,255,255,0.38)",
+            }}
+          >
+            Point the camera at the QR label or
+            type an SR number such as SCA-00017.
           </div>
         </div>
       </div>
