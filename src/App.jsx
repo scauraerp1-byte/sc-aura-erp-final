@@ -22,6 +22,7 @@ import BookingForm from "@/pages/BookingForm";
 import BookingDetail from "@/pages/BookingDetail";
 import Dispatch from "@/pages/Dispatch";
 import DispatchForm from "@/pages/DispatchForm";
+import DispatchDetail from "@/pages/DispatchDetail";
 import { EstimatesList, EstimateForm } from "@/pages/Estimates";
 import { VendorReturnsList, VendorReturnForm } from "@/pages/VendorReturns";
 import Analytics from "@/pages/Analytics";
