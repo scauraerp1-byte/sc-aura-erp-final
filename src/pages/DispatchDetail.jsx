@@ -71,10 +71,6 @@ export default function DispatchDetail() {
     };
   }, [id]);
 
-  /* =====================================================
-     TOTAL PIECES
-  ===================================================== */
-
   const totalPieces = (d?.items || []).reduce(
     (total, item) =>
       total +
@@ -88,9 +84,17 @@ export default function DispatchDetail() {
     0
   );
 
-  /* =====================================================
-     PDF DOWNLOAD
-  ===================================================== */
+  const getProductImage = (item) =>
+    item?.image ||
+    item?.image_url ||
+    item?.imageUrl ||
+    item?.product_image ||
+    item?.productImage ||
+    item?.photo ||
+    item?.photo_url ||
+    item?.thumbnail ||
+    item?.thumbnail_url ||
+    null;
 
   const downloadReceiptPdf = async () => {
     if (!d) return;
@@ -118,10 +122,6 @@ export default function DispatchDetail() {
     }
   };
 
-  /* =====================================================
-     PDF SHARE
-  ===================================================== */
-
   const shareReceiptPdf = async () => {
     if (!d) return;
 
@@ -148,11 +148,6 @@ export default function DispatchDetail() {
       setBusy("");
     }
   };
-
-  /* =====================================================
-     WHATSAPP SUMMARY
-     NO PUBLIC URL
-  ===================================================== */
 
   const shareSummary = () => {
     if (!d) return;
@@ -193,10 +188,6 @@ Payment Mode: ${(
     });
   };
 
-  /* =====================================================
-     LOADING
-  ===================================================== */
-
   if (loading) {
     return (
       <div className="w-full max-w-5xl mx-auto space-y-4">
@@ -210,14 +201,11 @@ Payment Mode: ${(
     );
   }
 
-  /* =====================================================
-     NOT FOUND
-  ===================================================== */
-
   if (!d) {
     return (
       <div className="w-full max-w-5xl mx-auto">
         <GlassCard className="text-center py-12">
+
           <div className="font-display text-xl">
             Dispatch not found
           </div>
@@ -235,6 +223,7 @@ Payment Mode: ${(
           >
             Back to Dispatch
           </button>
+
         </GlassCard>
       </div>
     );
@@ -243,9 +232,7 @@ Payment Mode: ${(
   return (
     <div className="w-full min-w-0 max-w-5xl mx-auto space-y-5 overflow-x-hidden">
 
-      {/* =================================================
-          BACK
-      ================================================= */}
+      {/* BACK */}
 
       <button
         type="button"
@@ -258,19 +245,14 @@ Payment Mode: ${(
         Back to Dispatch
       </button>
 
-      {/* =================================================
-          MAIN GRID
-      ================================================= */}
-
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 min-w-0">
 
-        {/* =================================================
-            LEFT
-        ================================================= */}
+        {/* LEFT */}
 
         <div className="lg:col-span-3 space-y-4 min-w-0">
 
           {/* HEADER */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -305,6 +287,7 @@ Payment Mode: ${(
           </GlassCard>
 
           {/* CUSTOMER */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <SectionTitle
@@ -326,8 +309,7 @@ Payment Mode: ${(
                   </div>
 
                   <div className="font-display text-lg break-words">
-                    {d.dispatch_to ||
-                      "-"}
+                    {d.dispatch_to || "-"}
                   </div>
                 </div>
 
@@ -379,12 +361,13 @@ Payment Mode: ${(
 
           </GlassCard>
 
-          {/* ITEMS */}
+          {/* PRODUCT DETAILS */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <SectionTitle
               overline="Order"
-              title={`Items · ${totalPieces} pcs`}
+              title={`Products · ${totalPieces} pcs`}
             />
 
             <div className="space-y-3">
@@ -411,6 +394,9 @@ Payment Mode: ${(
                         0
                     );
 
+                  const productImage =
+                    getProductImage(item);
+
                   return (
                     <div
                       key={
@@ -421,72 +407,118 @@ Payment Mode: ${(
                       className="p-3 sm:p-4 rounded-xl bg-white/[0.04] border border-white/10 min-w-0 overflow-hidden"
                     >
 
-                      <div className="flex items-start justify-between gap-3 min-w-0">
+                      {/* PRODUCT TOP */}
+
+                      <div className="flex items-start gap-3 min-w-0">
+
+                        {/* PRODUCT IMAGE */}
+
+                        <div className="w-20 h-24 sm:w-24 sm:h-28 rounded-xl overflow-hidden bg-white/5 border border-white/10 shrink-0">
+
+                          {productImage ? (
+                            <img
+                              src={productImage}
+                              alt={
+                                item.title ||
+                                item.name ||
+                                item.sr_number ||
+                                "Product"
+                              }
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display =
+                                  "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[10px] uppercase tracking-wider text-white/25 text-center px-2">
+                              No image
+                            </div>
+                          )}
+
+                        </div>
+
+                        {/* PRODUCT INFO */}
 
                         <div className="min-w-0 flex-1">
 
-                          <div className="text-[10px] uppercase tracking-[0.2em] text-[#ebd281] truncate">
-                            {item.sr_number ||
-                              "Product"}
+                          <div className="flex items-start justify-between gap-3">
+
+                            <div className="min-w-0 flex-1">
+
+                              <div className="text-[10px] uppercase tracking-[0.2em] text-[#ebd281] truncate">
+                                {item.sr_number ||
+                                  "Product"}
+                              </div>
+
+                              <div className="font-display text-base sm:text-lg mt-1 break-words">
+                                {item.title ||
+                                  item.name ||
+                                  "Product"}
+                              </div>
+
+                            </div>
+
+                            <div className="text-right shrink-0">
+
+                              <div className="text-xs text-white/45">
+                                {qty} pcs
+                              </div>
+
+                              <div className="font-display tabular-nums">
+                                {formatRupee(
+                                  amount
+                                )}
+                              </div>
+
+                            </div>
+
                           </div>
 
-                          <div className="font-display text-base sm:text-lg mt-1 break-words">
-                            {item.title ||
-                              item.name ||
-                              "Product"}
-                          </div>
+                          {/* SIZES */}
 
-                        </div>
+                          {Object.keys(
+                            item.sizes || {}
+                          ).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-3">
 
-                        <div className="text-right shrink-0">
-                          <div className="text-xs text-white/45">
-                            {qty} pcs
-                          </div>
+                              {Object.entries(
+                                item.sizes || {}
+                              ).map(
+                                ([size, quantity]) => (
+                                  <span
+                                    key={size}
+                                    className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[11px] whitespace-nowrap"
+                                  >
+                                    <span className="text-[#ebd281] font-semibold">
+                                      {size}
+                                    </span>
 
-                          <div className="font-display tabular-nums">
-                            {formatRupee(
-                              amount
-                            )}
-                          </div>
+                                    {" · "}
+
+                                    {quantity}
+                                  </span>
+                                )
+                              )}
+
+                            </div>
+                          )}
+
+                          {/* UNIT PRICE */}
+
+                          {item.unit_price !=
+                            null && (
+                            <div className="text-[11px] text-white/45 mt-3">
+                              Unit price:{" "}
+                              {formatRupee(
+                                item.unit_price
+                              )}
+                            </div>
+                          )}
+
                         </div>
 
                       </div>
-
-                      {/* SIZES */}
-                      {Object.keys(
-                        item.sizes || {}
-                      ).length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
-
-                          {Object.entries(
-                            item.sizes || {}
-                          ).map(
-                            ([size, quantity]) => (
-                              <span
-                                key={size}
-                                className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[11px] whitespace-nowrap"
-                              >
-                                <span className="text-[#ebd281] font-semibold">
-                                  {size}
-                                </span>
-                                {" · "}
-                                {quantity}
-                              </span>
-                            )
-                          )}
-
-                        </div>
-                      )}
-
-                      {/* UNIT PRICE */}
-                      {item.unit_price != null && (
-                        <div className="text-[11px] text-white/45 mt-3">
-                          Unit price:{" "}
-                          {formatRupee(
-                            item.unit_price
-                          )}
-                        </div>
-                      )}
 
                     </div>
                   );
@@ -499,13 +531,12 @@ Payment Mode: ${(
 
         </div>
 
-        {/* =================================================
-            RIGHT
-        ================================================= */}
+        {/* RIGHT */}
 
         <div className="lg:col-span-2 space-y-4 min-w-0">
 
           {/* PAYMENT */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <SectionTitle
@@ -575,6 +606,7 @@ Payment Mode: ${(
           </GlassCard>
 
           {/* PAYMENT MODE */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <SectionTitle
@@ -606,6 +638,7 @@ Payment Mode: ${(
           </GlassCard>
 
           {/* ACTIONS */}
+
           <GlassCard className="min-w-0 overflow-hidden">
 
             <SectionTitle
@@ -615,7 +648,6 @@ Payment Mode: ${(
 
             <div className="grid gap-2">
 
-              {/* DOWNLOAD */}
               <button
                 type="button"
                 onClick={
@@ -636,7 +668,6 @@ Payment Mode: ${(
                 Download PDF
               </button>
 
-              {/* SHARE PDF */}
               <button
                 type="button"
                 onClick={
@@ -647,8 +678,7 @@ Payment Mode: ${(
                 }
                 className="w-full rounded-full glass px-4 py-3 text-xs uppercase tracking-[0.18em] hover:bg-white/10 inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {busy ===
-                "share" ? (
+                {busy === "share" ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Share2 className="w-4 h-4 text-[#ebd281]" />
@@ -657,7 +687,6 @@ Payment Mode: ${(
                 Share PDF
               </button>
 
-              {/* WHATSAPP */}
               <button
                 type="button"
                 onClick={
