@@ -74,7 +74,7 @@ export default function FloatingFAB() {
   return (
     <div
       ref={fabRef}
-      className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2"
+      className="fixed bottom-7 right-5 z-50 flex flex-col items-end gap-2"
     >
       {open && (
         <div className="flex flex-col items-end gap-2 mb-2">
