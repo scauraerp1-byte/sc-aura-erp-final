@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { GlassCard, SectionTitle, Pill } from "../components/Primitives";
@@ -128,6 +128,22 @@ export default function Dashboard() {
     useState("");
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Open the existing Scan SR flow when Scan SR is launched from the Floating FAB.
+  useEffect(() => {
+    if (!location.state?.openScanner) return;
+
+    setScanError("");
+    setScannedProduct(null);
+    setScanOpen(true);
+
+    // Clear navigation state so refresh/back does not reopen the scanner.
+    navigate(location.pathname, {
+      replace: true,
+      state: {},
+    });
+  }, [location, navigate]);
 
   useEffect(() => {
     let mounted = true;
