@@ -24,7 +24,6 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatRupee } from "./share";
 
 const PAGE_W = 148;
 const PAGE_H = 210;
@@ -36,8 +35,150 @@ const LINE = [229, 231, 235];
 const SOFT = [248, 250, 252];
 const WHITE = [255, 255, 255];
 
-const FOOTER_Y = PAGE_H - 13;
-const CONTENT_BOTTOM = FOOTER_Y - 8;
+/* =========================================================
+   MONEY / NUMBER HELPERS
+========================================================= */
+
+function toFiniteNumber(value, fallback = 0) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  const cleaned = String(value ?? "")
+    .replace(/\u20B9/g, "")
+    .replace(/Rs\.?/gi, "")
+    .replace(/,/g, "")
+    .trim();
+
+  if (!cleaned) {
+    return fallback;
+  }
+
+  const numeric = Number(cleaned);
+
+  return Number.isFinite(numeric)
+    ? numeric
+    : fallback;
+}
+
+function getMoneyNumber(value) {
+  const numeric = toFiniteNumber(value, 0);
+
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 0,
+  }).format(numeric);
+}
+
+/*
+ * jsPDF's built-in Helvetica does not reliably contain the ₹ glyph.
+ * Draw a small vector rupee mark so PDF text never becomes NaN or
+ * loses the currency symbol.
+ */
+function drawRupeeMark(doc, x, y, size = 3.2) {
+  const top = y - size * 0.72;
+  const right = x + size * 0.82;
+  const mid = y - size * 0.16;
+  const bottom = y + size * 0.58;
+
+  doc.setLineWidth(0.35);
+
+  doc.setDrawColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
+
+  doc.line(
+    x,
+    top,
+    right,
+    top
+  );
+
+  doc.line(
+    x,
+    top + size * 0.18,
+    right,
+    top + size * 0.18
+  );
+
+  doc.line(
+    x,
+    mid,
+    right - size * 0.08,
+    mid
+  );
+
+  doc.line(
+    x + size * 0.05,
+    mid,
+    right - size * 0.18,
+    bottom
+  );
+
+  doc.setLineWidth(0.2);
+}
+
+function drawMoneyRight(
+  doc,
+  value,
+  rightX,
+  y,
+  {
+    fontSize = 8.5,
+    bold = false,
+  } = {}
+) {
+  const numberText =
+    getMoneyNumber(value);
+
+  doc.setFont(
+    "helvetica",
+    bold ? "bold" : "normal"
+  );
+
+  doc.setFontSize(fontSize);
+
+  doc.setTextColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
+
+  const numberWidth =
+    doc.getTextWidth(numberText);
+
+  const symbolWidth = 3.2;
+  const symbolGap = 1.2;
+
+  const startX =
+    rightX -
+    symbolWidth -
+    symbolGap -
+    numberWidth;
+
+  drawRupeeMark(
+    doc,
+    startX,
+    y - 0.25,
+    Math.min(
+      3.6,
+      Math.max(
+        2.8,
+        fontSize * 0.38
+      )
+    )
+  );
+
+  doc.text(
+    numberText,
+    rightX,
+    y,
+    {
+      align: "right",
+    }
+  );
+}
 
 /* =========================================================
    BACKEND URL
@@ -49,109 +190,48 @@ const BACKEND_URL =
   "";
 
 /* =========================================================
-   BASIC HELPERS
-========================================================= */
-
-function setTextColor(doc, color) {
-  doc.setTextColor(color[0], color[1], color[2]);
-}
-
-function setDrawColor(doc, color) {
-  doc.setDrawColor(color[0], color[1], color[2]);
-}
-
-function setFillColor(doc, color) {
-  doc.setFillColor(color[0], color[1], color[2]);
-}
-
-/*
- * jsPDF's built-in Helvetica is not a Unicode font. The ₹ glyph can
- * disappear when passed directly to doc.text(). Keep the existing
- * formatRupee() contract, but remove the glyph before drawing and
- * draw a small vector rupee mark next to the number.
- */
-function getMoneyNumber(value) {
-  const formatted = formatRupee(value);
-  const text = String(formatted ?? "0")
-    .replace(/\u20B9/g, "")
-    .replace(/Rs\.?/gi, "")
-    .trim();
-
-  return text || "0";
-}
-
-function drawRupeeMark(doc, x, y, size = 3.2) {
-  const top = y - size * 0.72;
-  const left = x;
-  const right = x + size * 0.82;
-  const mid = y - size * 0.16;
-  const bottom = y + size * 0.58;
-
-  doc.setLineWidth(0.35);
-  setDrawColor(doc, INK);
-
-  doc.line(left, top, right, top);
-  doc.line(left, top + size * 0.18, right, top + size * 0.18);
-  doc.line(left, mid, right - size * 0.08, mid);
-  doc.line(left + size * 0.05, mid, right - size * 0.18, bottom);
-
-  doc.setLineWidth(0.2);
-}
-
-function drawMoneyRight(doc, value, rightX, y, options = {}) {
-  const fontSize = options.fontSize || 8.5;
-  const bold = options.bold ?? false;
-
-  doc.setFont("helvetica", bold ? "bold" : "normal");
-  doc.setFontSize(fontSize);
-  setTextColor(doc, INK);
-
-  const numberText = getMoneyNumber(value);
-  const numberWidth = doc.getTextWidth(numberText);
-  const symbolGap = 1.2;
-  const symbolWidth = 3.2;
-  const totalWidth = symbolWidth + symbolGap + numberWidth;
-
-  const startX = rightX - totalWidth;
-
-  drawRupeeMark(
-    doc,
-    startX,
-    y - 0.25,
-    Math.min(3.6, Math.max(2.8, fontSize * 0.38))
-  );
-
-  doc.text(
-    numberText,
-    rightX,
-    y,
-    { align: "right" }
-  );
-}
-
-/* =========================================================
    IMAGE HELPERS
 ========================================================= */
 
+/**
+ * Convert an image source into a data URL.
+ *
+ * IMPORTANT:
+ * External URLs are NOT fetched directly from the browser.
+ * They are routed through the backend proxy to avoid CORS.
+ */
 async function imageToDataUrl(src) {
-  if (!src || typeof src !== "string") return null;
+  if (!src) {
+    return null;
+  }
 
+  if (typeof src !== "string") {
+    return null;
+  }
+
+  /* Already a data URL */
   if (src.startsWith("data:image/")) {
     return src;
   }
 
+  /* Blob URL */
   if (src.startsWith("blob:")) {
     try {
       const response = await fetch(src);
-      if (!response.ok) return null;
+
+      if (!response.ok) {
+        return null;
+      }
 
       const blob = await response.blob();
+
       return await blobToDataUrl(blob);
     } catch {
       return null;
     }
   }
 
+  /* Absolute external URL */
   if (
     src.startsWith("http://") ||
     src.startsWith("https://")
@@ -162,6 +242,7 @@ async function imageToDataUrl(src) {
           "PDF image skipped: backend URL is not configured.",
           src
         );
+
         return null;
       }
 
@@ -176,10 +257,12 @@ async function imageToDataUrl(src) {
           response.status,
           src
         );
+
         return null;
       }
 
       const blob = await response.blob();
+
       return await blobToDataUrl(blob);
     } catch (error) {
       console.warn(
@@ -187,15 +270,21 @@ async function imageToDataUrl(src) {
         src,
         error
       );
+
       return null;
     }
   }
 
+  /* Relative URL */
   try {
     const response = await fetch(src);
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      return null;
+    }
 
     const blob = await response.blob();
+
     return await blobToDataUrl(blob);
   } catch {
     return null;
@@ -206,23 +295,40 @@ function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      resolve(reader.result);
+    };
+
     reader.onerror = reject;
 
     reader.readAsDataURL(blob);
   });
 }
 
+/**
+ * Detect correct image type for jsPDF.
+ */
 function getImageType(dataUrl) {
-  if (!dataUrl || typeof dataUrl !== "string") {
+  if (
+    !dataUrl ||
+    typeof dataUrl !== "string"
+  ) {
     return "JPEG";
   }
 
-  if (dataUrl.startsWith("data:image/png")) {
+  if (
+    dataUrl.startsWith(
+      "data:image/png"
+    )
+  ) {
     return "PNG";
   }
 
-  if (dataUrl.startsWith("data:image/webp")) {
+  if (
+    dataUrl.startsWith(
+      "data:image/webp"
+    )
+  ) {
     return "WEBP";
   }
 
@@ -259,14 +365,19 @@ async function drawHeader(
 
   let textX = MARGIN;
 
+  /*
+   * Logo
+   */
   if (branding?.logo_url) {
-    const logo = await imageToDataUrl(
-      branding.logo_url
-    );
+    const logo =
+      await imageToDataUrl(
+        branding.logo_url
+      );
 
     if (logo) {
       try {
-        const type = getImageType(logo);
+        const type =
+          getImageType(logo);
 
         doc.addImage(
           logo,
@@ -277,31 +388,59 @@ async function drawHeader(
           logoSize
         );
 
-        textX = MARGIN + 24;
+        textX =
+          MARGIN + 24;
       } catch {
         textX = MARGIN;
       }
     }
   }
 
-  doc.setFont("helvetica", "bold");
+  /*
+   * Company name
+   */
+  doc.setFont(
+    "helvetica",
+    "bold"
+  );
+
   doc.setFontSize(15);
-  setTextColor(doc, INK);
+
+  doc.setTextColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
 
   doc.text(
-    branding?.company_name || "SC Aura Kurtis",
+    branding?.company_name ||
+      "SC Aura Kurtis",
     textX,
     y + 5.5
   );
 
-  doc.setFont("helvetica", "normal");
+  /*
+   * Company information
+   */
+  doc.setFont(
+    "helvetica",
+    "normal"
+  );
+
   doc.setFontSize(8.2);
-  setTextColor(doc, MUTE);
+
+  doc.setTextColor(
+    MUTE[0],
+    MUTE[1],
+    MUTE[2]
+  );
 
   const information = [];
 
   if (branding?.address) {
-    information.push(branding.address);
+    information.push(
+      branding.address
+    );
   }
 
   const secondLine = [
@@ -312,16 +451,23 @@ async function drawHeader(
   ].filter(Boolean);
 
   if (secondLine.length) {
-    information.push(secondLine.join("  ·  "));
+    information.push(
+      secondLine.join("  ·  ")
+    );
   }
 
-  let infoY = y + 10.5;
+  let infoY =
+    y + 10.5;
 
   for (const line of information) {
-    const wrapped = doc.splitTextToSize(
-      String(line),
-      PAGE_W - textX - MARGIN - 44
-    );
+    const wrapped =
+      doc.splitTextToSize(
+        String(line),
+        PAGE_W -
+          textX -
+          MARGIN -
+          44
+      );
 
     doc.text(
       wrapped,
@@ -329,9 +475,13 @@ async function drawHeader(
       infoY
     );
 
-    infoY += wrapped.length * 3.5;
+    infoY +=
+      wrapped.length * 3.5;
   }
 
+  /*
+   * Document number box
+   */
   const boxW = 44;
   const boxH = 20;
 
@@ -340,8 +490,17 @@ async function drawHeader(
     MARGIN -
     boxW;
 
-  setDrawColor(doc, LINE);
-  setFillColor(doc, SOFT);
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
+
+  doc.setFillColor(
+    SOFT[0],
+    SOFT[1],
+    SOFT[2]
+  );
 
   doc.roundedRect(
     boxX,
@@ -353,30 +512,59 @@ async function drawHeader(
     "FD"
   );
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(
+    "helvetica",
+    "bold"
+  );
+
   doc.setFontSize(9);
-  setTextColor(doc, INK);
+
+  doc.setTextColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
 
   doc.text(
     title,
-    boxX + boxW / 2,
+    boxX +
+      boxW / 2,
     y + 7,
-    { align: "center" }
+    {
+      align: "center",
+    }
   );
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(
+    "helvetica",
+    "normal"
+  );
+
   doc.setFontSize(10.5);
 
   doc.text(
     documentNumber || "",
-    boxX + boxW / 2,
+    boxX +
+      boxW / 2,
     y + 14,
-    { align: "center" }
+    {
+      align: "center",
+    }
   );
 
-  const dividerY = y + headerHeight + 1;
+  /*
+   * Divider
+   */
+  const dividerY =
+    y +
+    headerHeight +
+    1;
 
-  setDrawColor(doc, LINE);
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
 
   doc.line(
     MARGIN,
@@ -398,16 +586,18 @@ function drawMetaBlock(
   startY
 ) {
   const contentWidth =
-    PAGE_W - MARGIN * 2;
+    PAGE_W -
+    MARGIN * 2;
 
   const colWidth =
     contentWidth / 2;
 
   const rowHeight = 6.5;
 
-  const rows = Math.ceil(
-    entries.length / 2
-  );
+  const rows =
+    Math.ceil(
+      entries.length / 2
+    );
 
   doc.setFontSize(8.5);
 
@@ -416,14 +606,18 @@ function drawMetaBlock(
     index < entries.length;
     index++
   ) {
-    const [label, value] =
-      entries[index];
+    const [
+      label,
+      value,
+    ] = entries[index];
 
     const column =
       index % 2;
 
     const row =
-      Math.floor(index / 2);
+      Math.floor(
+        index / 2
+      );
 
     const x =
       MARGIN +
@@ -433,8 +627,19 @@ function drawMetaBlock(
       startY +
       row * rowHeight;
 
-    doc.setFont("helvetica", "normal");
-    setTextColor(doc, MUTE);
+    /*
+     * Label
+     */
+    doc.setFont(
+      "helvetica",
+      "normal"
+    );
+
+    doc.setTextColor(
+      MUTE[0],
+      MUTE[1],
+      MUTE[2]
+    );
 
     doc.text(
       String(label),
@@ -442,8 +647,19 @@ function drawMetaBlock(
       y
     );
 
-    doc.setFont("helvetica", "bold");
-    setTextColor(doc, INK);
+    /*
+     * Value
+     */
+    doc.setFont(
+      "helvetica",
+      "bold"
+    );
+
+    doc.setTextColor(
+      INK[0],
+      INK[1],
+      INK[2]
+    );
 
     const valueText =
       value === null ||
@@ -485,7 +701,9 @@ function getSizeText(item) {
     return "";
   }
 
-  return Object.entries(item.sizes)
+  return Object.entries(
+    item.sizes
+  )
     .filter(
       ([, quantity]) =>
         Number(quantity || 0) > 0
@@ -503,13 +721,22 @@ function getTotalQuantity(item) {
     !item.sizes ||
     typeof item.sizes !== "object"
   ) {
-    return Number(item?.quantity || 0);
+    return Number(
+      item?.quantity || 0
+    );
   }
 
-  return Object.values(item.sizes).reduce(
-    (total, quantity) =>
+  return Object.values(
+    item.sizes
+  ).reduce(
+    (
+      total,
+      quantity
+    ) =>
       total +
-      Number(quantity || 0),
+      Number(
+        quantity || 0
+      ),
     0
   );
 }
@@ -532,6 +759,10 @@ async function drawItemsTable(
       ? items
       : [];
 
+  /*
+   * Prepare all images before
+   * AutoTable starts.
+   */
   const preparedItems = [];
 
   for (
@@ -562,7 +793,11 @@ async function drawItemsTable(
 
     const description =
       `${item?.title || ""}` +
-      `${sizeText ? `\n${sizeText}` : ""}`;
+      `${
+        sizeText
+          ? `\n${sizeText}`
+          : ""
+      }`;
 
     const unitPrice =
       Number(
@@ -570,7 +805,8 @@ async function drawItemsTable(
       );
 
     const amount =
-      totalQty * unitPrice;
+      totalQty *
+      unitPrice;
 
     preparedItems.push({
       item,
@@ -582,52 +818,72 @@ async function drawItemsTable(
     });
   }
 
-  const head = showPrice
-    ? [[
-        "#",
-        "SCA",
-        "Item / Description",
-        "Qty",
-        "Rate",
-        "Amount",
-      ]]
-    : [[
-        "#",
-        "SCA",
-        "Item / Description",
-        "Qty",
-      ]];
+  const head =
+    showPrice
+      ? [
+          [
+            "#",
+            "SCA",
+            "Item / Description",
+            "Qty",
+            "Rate",
+            "Amount",
+          ],
+        ]
+      : [
+          [
+            "#",
+            "SCA",
+            "Item / Description",
+            "Qty",
+          ],
+        ];
 
   /*
-   * Important:
-   * For rows that have an image, the Item / Description cell's
-   * AutoTable text is intentionally blank. The cell is rendered
-   * manually in didDrawCell so AutoTable can never print text
-   * underneath the image.
+   * When an image exists, Item / Description is intentionally
+   * blank in AutoTable. The cell is rendered manually so the
+   * description can never overlap the image.
    */
   const body =
     preparedItems.map(
-      (entry, index) => {
+      (
+        entry,
+        index
+      ) => {
         if (showPrice) {
           return [
             String(index + 1),
-            entry.item?.sr_number || "",
+
+            entry.item?.sr_number ||
+              "",
+
             entry.image
               ? ""
               : entry.description,
-            String(entry.totalQty),
+
+            String(
+              entry.totalQty
+            ),
+
             "",
+
             "",
           ];
         }
 
         return [
           String(index + 1),
-          entry.item?.sr_number || "",
+
+          entry.item?.sr_number ||
+            "",
+
           entry.image
             ? ""
             : entry.description,
-          String(entry.totalQty),
+
+          String(
+            entry.totalQty
+          ),
         ];
       }
     );
@@ -644,19 +900,27 @@ async function drawItemsTable(
       font: "helvetica",
       fontSize: 8.1,
       cellPadding: 2.2,
+
       lineColor: LINE,
       lineWidth: 0.15,
+
       textColor: INK,
+
       valign: "middle",
+
       overflow: "linebreak",
     },
 
     headStyles: {
       fillColor: INK,
       textColor: WHITE,
+
       fontStyle: "bold",
+
       fontSize: 8,
+
       halign: "left",
+
       valign: "middle",
     },
 
@@ -664,133 +928,173 @@ async function drawItemsTable(
       fillColor: SOFT,
     },
 
-    columnStyles: showPrice
-      ? {
-          0: {
-            cellWidth: 8,
-            halign: "center",
-          },
+    /*
+     * Total width = 128mm
+     *
+     * #       8
+     * SCA    24
+     * Item   43
+     * Qty    11
+     * Rate   19
+     * Amount 23
+     *
+     * This keeps SCA-00017 on one line while keeping the
+     * overall table width unchanged.
+     */
+    columnStyles:
+      showPrice
+        ? {
+            0: {
+              cellWidth: 8,
+              halign: "center",
+            },
 
-          1: {
-            cellWidth: 18,
-            fontStyle: "bold",
-          },
+            1: {
+              cellWidth: 24,
+              fontStyle: "bold",
+              overflow: "ellipsize",
+            },
 
-          2: {
-            cellWidth: 49,
-          },
+            2: {
+              cellWidth: 43,
+            },
 
-          3: {
-            cellWidth: 11,
-            halign: "right",
-          },
+            3: {
+              cellWidth: 11,
+              halign: "right",
+            },
 
-          4: {
-            cellWidth: 19,
-            halign: "right",
-          },
+            4: {
+              cellWidth: 19,
+              halign: "right",
+            },
 
-          5: {
-            cellWidth: 23,
-            halign: "right",
-            fontStyle: "bold",
-          },
-        }
-      : {
-          0: {
-            cellWidth: 8,
-            halign: "center",
-          },
+            5: {
+              cellWidth: 23,
+              halign: "right",
+              fontStyle: "bold",
+            },
+          }
+        : {
+            0: {
+              cellWidth: 8,
+              halign: "center",
+            },
 
-          1: {
-            cellWidth: 18,
-            fontStyle: "bold",
-          },
+            1: {
+              cellWidth: 24,
+              fontStyle: "bold",
+              overflow: "ellipsize",
+            },
 
-          2: {
-            cellWidth: 88,
-          },
+            2: {
+              cellWidth: 82,
+            },
 
-          3: {
-            cellWidth: 14,
-            halign: "right",
+            3: {
+              cellWidth: 14,
+              halign: "right",
+            },
           },
-        },
 
     margin: {
       left: MARGIN,
       right: MARGIN,
     },
 
+    /*
+     * Reserve enough height for product image +
+     * description.
+     */
     didParseCell(data) {
       if (
-        data.section !== "body" ||
+        data.section !==
+          "body" ||
         data.column.index !== 2
       ) {
         return;
       }
 
       const entry =
-        preparedItems[data.row.index];
+        preparedItems[
+          data.row.index
+        ];
 
-      if (!entry) return;
-
-      if (entry.image) {
-        /*
-         * Reserve enough vertical space for both:
-         * - product image
-         * - title + size lines
-         */
-        const textWidth =
-          Math.max(
-            12,
-            data.cell.width - 24
-          );
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.1);
-
-        const lines =
-          doc.splitTextToSize(
-            entry.description || "",
-            textWidth
-          );
-
-        const textHeight =
-          lines.length * 3.8 + 5;
-
-        data.cell.text = [];
-        data.cell.minCellHeight =
-          Math.max(
-            data.cell.minCellHeight || 0,
-            25,
-            textHeight
-          );
+      if (!entry?.image) {
+        return;
       }
+
+      doc.setFont(
+        "helvetica",
+        "normal"
+      );
+
+      doc.setFontSize(8.1);
+
+      const textWidth =
+        Math.max(
+          12,
+          data.cell.width -
+            24
+        );
+
+      const lines =
+        doc.splitTextToSize(
+          entry.description ||
+            "",
+          textWidth
+        );
+
+      const textHeight =
+        lines.length *
+          3.8 +
+        5;
+
+      /*
+       * Critical:
+       * Remove AutoTable's original text completely.
+       */
+      data.cell.text = [];
+
+      data.cell.minCellHeight =
+        Math.max(
+          data.cell.minCellHeight ||
+            0,
+          25,
+          textHeight
+        );
     },
 
+    /*
+     * Draw image + description inside
+     * Item / Description cell.
+     */
     didDrawCell(data) {
-      if (data.section !== "body") {
+      if (
+        data.section !==
+        "body"
+      ) {
         return;
       }
 
       const entry =
-        preparedItems[data.row.index];
+        preparedItems[
+          data.row.index
+        ];
 
-      if (!entry) return;
-
-      const cell = data.cell;
+      if (!entry) {
+        return;
+      }
 
       /*
-       * Product image + description:
-       * the Item / Description cell is rendered manually so
-       * AutoTable can never place its original text underneath
-       * the image.
+       * ITEM / DESCRIPTION
        */
-      if (data.column.index === 2) {
-        if (!entry.image) {
-          return;
-        }
+      if (
+        data.column.index === 2 &&
+        entry.image
+      ) {
+        const cell =
+          data.cell;
 
         try {
           const padding = 2;
@@ -798,7 +1102,8 @@ async function drawItemsTable(
           const imageSize =
             Math.min(
               17,
-              cell.height - padding * 2
+              cell.height -
+                padding * 2
             );
 
           const imageX =
@@ -806,11 +1111,24 @@ async function drawItemsTable(
 
           const imageY =
             cell.y +
-            (cell.height - imageSize) / 2;
+            (
+              cell.height -
+              imageSize
+            ) /
+              2;
 
-          setFillColor(
-            doc,
-            cell.fillColor || SOFT
+          /*
+           * Clear the dedicated image area.
+           */
+          doc.setFillColor(
+            cell.fillColor?.[0] ??
+              SOFT[0],
+
+            cell.fillColor?.[1] ??
+              SOFT[1],
+
+            cell.fillColor?.[2] ??
+              SOFT[2]
           );
 
           doc.rect(
@@ -819,56 +1137,75 @@ async function drawItemsTable(
             19,
             Math.max(
               1,
-              cell.height - 1.4
+              cell.height -
+                1.4
             ),
             "F"
           );
 
-          const imageType =
-            getImageType(entry.image);
-
+          /*
+           * Product image.
+           */
           doc.addImage(
             entry.image,
-            imageType,
+            getImageType(
+              entry.image
+            ),
             imageX,
             imageY,
             imageSize,
             imageSize
           );
 
-          const textX =
-            cell.x + 21.5;
-
-          const availableWidth =
-            cell.width - 23.5;
-
+          /*
+           * Description to the right of image.
+           */
           doc.setFont(
             "helvetica",
             "normal"
           );
-          doc.setFontSize(8.1);
-          setTextColor(doc, INK);
+
+          doc.setFontSize(
+            8.1
+          );
+
+          doc.setTextColor(
+            INK[0],
+            INK[1],
+            INK[2]
+          );
+
+          const textX =
+            cell.x + 21.5;
+
+          const availableWidth =
+            Math.max(
+              12,
+              cell.width -
+                23.5
+            );
 
           const text =
             doc.splitTextToSize(
-              entry.description || "",
-              Math.max(
-                12,
-                availableWidth
-              )
+              entry.description ||
+                "",
+              availableWidth
             );
 
           const lineHeight = 3.8;
 
           const totalTextHeight =
-            text.length * lineHeight;
+            text.length *
+            lineHeight;
 
           const textY =
             cell.y +
             Math.max(
               4.2,
-              (cell.height -
-                totalTextHeight) /
+              (
+                cell.height -
+                totalTextHeight
+              ) /
                 2 +
                 2.8
             );
@@ -883,55 +1220,52 @@ async function drawItemsTable(
             "Unable to draw product image:",
             error
           );
-
-          doc.setFont(
-            "helvetica",
-            "normal"
-          );
-          doc.setFontSize(8.1);
-          setTextColor(doc, INK);
-
-          const fallback =
-            doc.splitTextToSize(
-              entry.description || "",
-              cell.width - 4
-            );
-
-          doc.text(
-            fallback,
-            cell.x + 2,
-            cell.y + 5
-          );
         }
 
         return;
       }
 
       /*
-       * Rate / Amount:
-       * AutoTable receives an empty value for these columns and
-       * we draw the value ourselves so ₹ is always visible.
+       * RATE / AMOUNT
+       *
+       * These are drawn manually because Helvetica does not
+       * reliably render the ₹ Unicode character.
        */
       if (
         showPrice &&
         (
-          data.column.index === 4 ||
-          data.column.index === 5
+          data.column.index ===
+            4 ||
+          data.column.index ===
+            5
         )
       ) {
+        const cell =
+          data.cell;
+
         drawMoneyRight(
           doc,
-          data.column.index === 4
+
+          data.column.index ===
+            4
             ? entry.unitPrice
             : entry.amount,
-          cell.x + cell.width - 2.2,
+
+          cell.x +
+            cell.width -
+            2.2,
+
           cell.y +
-            cell.height / 2 +
+            cell.height /
+              2 +
             2.7,
+
           {
             fontSize: 8.1,
+
             bold:
-              data.column.index === 5,
+              data.column.index ===
+              5,
           }
         );
       }
@@ -948,13 +1282,6 @@ async function drawItemsTable(
    TOTALS BOX
 ========================================================= */
 
-function totalsHeight(lines) {
-  return (
-    lines.length * 6.5 +
-    8
-  );
-}
-
 function drawTotalsBlock(
   doc,
   lines,
@@ -969,10 +1296,24 @@ function drawTotalsBlock(
     boxW;
 
   const boxH =
-    totalsHeight(lines);
+    lines.length *
+      rowH +
+    8;
 
-  setDrawColor(doc, LINE);
-  setFillColor(doc, SOFT);
+  /*
+   * Box
+   */
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
+
+  doc.setFillColor(
+    SOFT[0],
+    SOFT[1],
+    SOFT[2]
+  );
 
   doc.roundedRect(
     boxX,
@@ -998,32 +1339,54 @@ function drawTotalsBlock(
       bold,
     ] = lines[index];
 
+    /*
+     * Divider before highlighted final value.
+     */
     if (
       bold &&
       index > 0
     ) {
-      setDrawColor(doc, LINE);
+      doc.setDrawColor(
+        LINE[0],
+        LINE[1],
+        LINE[2]
+      );
 
       doc.line(
         boxX + 3,
         currentY - 4.2,
-        boxX + boxW - 3,
+        boxX +
+          boxW -
+          3,
         currentY - 4.2
       );
     }
 
     doc.setFont(
       "helvetica",
-      bold ? "bold" : "normal"
+      bold
+        ? "bold"
+        : "normal"
     );
 
     doc.setFontSize(
-      bold ? 9 : 8.5
+      bold
+        ? 9
+        : 8.5
     );
 
-    setTextColor(
-      doc,
-      bold ? INK : MUTE
+    doc.setTextColor(
+      bold
+        ? INK[0]
+        : MUTE[0],
+
+      bold
+        ? INK[1]
+        : MUTE[1],
+
+      bold
+        ? INK[2]
+        : MUTE[2]
     );
 
     doc.text(
@@ -1033,38 +1396,59 @@ function drawTotalsBlock(
     );
 
     /*
-     * Monetary values are drawn with a vector ₹ symbol.
-     * Non-money values (e.g. Total Pieces) remain normal text.
+     * Numeric values = money.
+     *
+     * String values = pieces/counts.
      */
-    const isMoney =
-      !/pieces/i.test(String(label));
-
-    if (isMoney) {
+    if (
+      typeof value ===
+      "number"
+    ) {
       drawMoneyRight(
         doc,
         value,
-        boxX + boxW - 3,
+        boxX +
+          boxW -
+          3,
         currentY,
         {
-          fontSize: bold ? 9 : 8.5,
+          fontSize:
+            bold
+              ? 9
+              : 8.5,
+
           bold,
         }
       );
     } else {
+      doc.setTextColor(
+        INK[0],
+        INK[1],
+        INK[2]
+      );
+
       doc.setFont(
         "helvetica",
-        bold ? "bold" : "normal"
+        bold
+          ? "bold"
+          : "normal"
       );
+
       doc.setFontSize(
-        bold ? 9 : 8.5
+        bold
+          ? 9
+          : 8.5
       );
-      setTextColor(doc, INK);
 
       doc.text(
         String(value),
-        boxX + boxW - 3,
+        boxX +
+          boxW -
+          3,
         currentY,
-        { align: "right" }
+        {
+          align: "right",
+        }
       );
     }
 
@@ -1078,25 +1462,6 @@ function drawTotalsBlock(
   );
 }
 
-function ensureTotalsSpace(
-  doc,
-  currentY,
-  lines
-) {
-  const needed =
-    totalsHeight(lines) + 5;
-
-  if (
-    currentY + needed >
-    CONTENT_BOTTOM
-  ) {
-    doc.addPage();
-    return MARGIN;
-  }
-
-  return currentY;
-}
-
 /* =========================================================
    FOOTER
 ========================================================= */
@@ -1105,13 +1470,20 @@ function drawFooter(
   doc,
   branding
 ) {
-  setDrawColor(doc, LINE);
+  const footerY =
+    PAGE_H - 13;
+
+  doc.setDrawColor(
+    LINE[0],
+    LINE[1],
+    LINE[2]
+  );
 
   doc.line(
     MARGIN,
-    FOOTER_Y - 5,
+    footerY - 5,
     PAGE_W - MARGIN,
-    FOOTER_Y - 5
+    footerY - 5
   );
 
   doc.setFont(
@@ -1120,7 +1492,12 @@ function drawFooter(
   );
 
   doc.setFontSize(9);
-  setTextColor(doc, INK);
+
+  doc.setTextColor(
+    INK[0],
+    INK[1],
+    INK[2]
+  );
 
   /*
    * LOCKED:
@@ -1129,8 +1506,11 @@ function drawFooter(
   doc.text(
     branding?.company_name ||
       "SC Aura Kurtis",
+
     PAGE_W / 2,
-    FOOTER_Y,
+
+    footerY,
+
     {
       align: "center",
     }
@@ -1141,18 +1521,86 @@ function drawFooter(
    TOTAL PIECES
 ========================================================= */
 
-function calculateTotalPieces(items) {
+function calculateTotalPieces(
+  items
+) {
   return (
     Array.isArray(items)
       ? items
       : []
   ).reduce(
-    (total, item) =>
+    (
+      total,
+      item
+    ) =>
       total +
       getTotalQuantity(item),
     0
   );
 }
+
+function calculateItemsTotal(
+  items
+) {
+  return (
+    Array.isArray(items)
+      ? items
+      : []
+  ).reduce(
+    (
+      total,
+      item
+    ) => {
+      const quantity =
+        getTotalQuantity(item);
+
+      const rate =
+        toFiniteNumber(
+          item?.unit_price,
+          0
+        );
+
+      return (
+        total +
+        quantity * rate
+      );
+    },
+    0
+  );
+}
+
+function firstValidNumber(
+  ...values
+) {
+  for (
+    const value of values
+  ) {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      continue;
+    }
+
+    const numeric =
+      toFiniteNumber(
+        value,
+        NaN
+      );
+
+    if (
+      Number.isFinite(
+        numeric
+      )
+    ) {
+      return numeric;
+    }
+  }
+
+  return 0;
+}
+
 /* =========================================================
    BOOKING PDF
 ========================================================= */
@@ -1184,39 +1632,56 @@ export async function buildBookingPDF(
               ).toLocaleString()
             : "—",
         ],
+
         [
           "Booking No",
-          booking?.booking_no || "—",
+          booking?.booking_no ||
+            "—",
         ],
+
         [
           "Customer",
-          booking?.customer_snapshot?.name ||
+          booking
+            ?.customer_snapshot
+            ?.name ||
             "—",
         ],
+
         [
           "Shop",
-          booking?.customer_snapshot?.shop_name ||
+          booking
+            ?.customer_snapshot
+            ?.shop_name ||
             "—",
         ],
+
         [
           "Phone",
-          booking?.customer_snapshot?.phone ||
+          booking
+            ?.customer_snapshot
+            ?.phone ||
             "—",
         ],
+
         [
           "Status",
           (
-            booking?.status || ""
-          ).toUpperCase() || "—",
+            booking?.status ||
+            ""
+          ).toUpperCase() ||
+            "—",
         ],
       ],
       y
     );
 
+  const bookingItems =
+    booking?.items || [];
+
   y =
     await drawItemsTable(
       doc,
-      booking?.items || [],
+      bookingItems,
       y,
       {
         showPrice: true,
@@ -1224,51 +1689,67 @@ export async function buildBookingPDF(
       }
     );
 
-  const totalPieces =
-    calculateTotalPieces(
-      booking?.items || []
+  const itemTotal =
+    firstValidNumber(
+      booking?.item_total,
+      calculateItemsTotal(
+        bookingItems
+      )
     );
 
-  const totals = [
-    [
-      "Item Total",
-      formatRupee(
-        booking?.item_total
-      ),
-      false,
-    ],
-    [
-      "Advance Received",
-      formatRupee(
-        booking?.advance_received
-      ),
-      false,
-    ],
-    [
-      "Remaining",
-      formatRupee(
-        booking?.remaining
-      ),
-      true,
-    ],
-    [
-      "Total Pieces",
-      String(totalPieces),
-      false,
-    ],
-  ];
+  const advanceReceived =
+    firstValidNumber(
+      booking?.advance_received,
+      0
+    );
 
-  y = ensureTotalsSpace(
-    doc,
-    y,
-    totals
-  );
+  const remaining =
+    firstValidNumber(
+      booking?.remaining,
+      Math.max(
+        0,
+        itemTotal -
+          advanceReceived
+      )
+    );
 
-  drawTotalsBlock(
-    doc,
-    totals,
-    y
-  );
+  const totalPieces =
+    calculateTotalPieces(
+      bookingItems
+    );
+
+  y =
+    drawTotalsBlock(
+      doc,
+      [
+        [
+          "Item Total",
+          itemTotal,
+          false,
+        ],
+
+        [
+          "Advance Received",
+          advanceReceived,
+          false,
+        ],
+
+        [
+          "Remaining",
+          remaining,
+          true,
+        ],
+
+        [
+          "Total Pieces",
+          String(
+            totalPieces
+          ),
+          false,
+        ],
+      ],
+      y
+    );
 
   drawFooter(
     doc,
@@ -1309,18 +1790,25 @@ export async function buildDispatchPDF(
               ).toLocaleString()
             : "—",
         ],
+
         [
           "Dispatch No",
-          dispatch?.dispatch_no || "—",
+          dispatch?.dispatch_no ||
+            "—",
         ],
+
         [
           "Dispatch To",
-          dispatch?.dispatch_to || "—",
+          dispatch?.dispatch_to ||
+            "—",
         ],
+
         [
           "Phone",
-          dispatch?.phone || "—",
+          dispatch?.phone ||
+            "—",
         ],
+
         [
           "Payment Mode",
           (
@@ -1328,6 +1816,7 @@ export async function buildDispatchPDF(
             "cash"
           ).toUpperCase(),
         ],
+
         [
           "Payment Status",
           (
@@ -1342,10 +1831,13 @@ export async function buildDispatchPDF(
       y
     );
 
+  const dispatchItems =
+    dispatch?.items || [];
+
   y =
     await drawItemsTable(
       doc,
-      dispatch?.items || [],
+      dispatchItems,
       y,
       {
         showPrice: true,
@@ -1353,65 +1845,92 @@ export async function buildDispatchPDF(
       }
     );
 
-  const totalPieces =
-    calculateTotalPieces(
-      dispatch?.items || []
+  const itemTotal =
+    firstValidNumber(
+      dispatch?.item_total,
+      calculateItemsTotal(
+        dispatchItems
+      )
     );
 
-  const totals = [
-    [
-      "Item Total",
-      formatRupee(
-        dispatch?.item_total
-      ),
-      false,
-    ],
-    [
-      "Delivery Charges",
-      formatRupee(
-        dispatch?.delivery_charges
-      ),
-      false,
-    ],
-    [
-      "Grand Total",
-      formatRupee(
-        dispatch?.grand_total
-      ),
-      false,
-    ],
-    [
-      "Advance Received",
-      formatRupee(
-        dispatch?.advance_received
-      ),
-      false,
-    ],
-    [
-      "Final Payable",
-      formatRupee(
-        dispatch?.final_payable
-      ),
-      true,
-    ],
-    [
-      "Total Pieces",
-      String(totalPieces),
-      false,
-    ],
-  ];
+  const deliveryCharges =
+    firstValidNumber(
+      dispatch?.delivery_charges,
+      0
+    );
 
-  y = ensureTotalsSpace(
-    doc,
-    y,
-    totals
-  );
+  const grandTotal =
+    firstValidNumber(
+      dispatch?.grand_total,
+      itemTotal +
+        deliveryCharges
+    );
 
-  drawTotalsBlock(
-    doc,
-    totals,
-    y
-  );
+  const advanceReceived =
+    firstValidNumber(
+      dispatch?.advance_received,
+      0
+    );
+
+  const finalPayable =
+    firstValidNumber(
+      dispatch?.final_payable,
+      Math.max(
+        0,
+        grandTotal -
+          advanceReceived
+      )
+    );
+
+  const totalPieces =
+    calculateTotalPieces(
+      dispatchItems
+    );
+
+  y =
+    drawTotalsBlock(
+      doc,
+      [
+        [
+          "Item Total",
+          itemTotal,
+          false,
+        ],
+
+        [
+          "Delivery Charges",
+          deliveryCharges,
+          false,
+        ],
+
+        [
+          "Grand Total",
+          grandTotal,
+          false,
+        ],
+
+        [
+          "Advance Received",
+          advanceReceived,
+          false,
+        ],
+
+        [
+          "Final Payable",
+          finalPayable,
+          true,
+        ],
+
+        [
+          "Total Pieces",
+          String(
+            totalPieces
+          ),
+          false,
+        ],
+      ],
+      y
+    );
 
   drawFooter(
     doc,
@@ -1452,25 +1971,34 @@ export async function buildEstimatePDF(
               ).toLocaleString()
             : "—",
         ],
+
         [
           "Estimate No",
-          estimate?.estimate_no || "—",
+          estimate?.estimate_no ||
+            "—",
         ],
+
         [
           "Customer",
           estimate?.customer_name ||
             "Walk-in",
         ],
+
         [
           "Phone",
-          estimate?.customer_phone || "—",
+          estimate?.customer_phone ||
+            "—",
         ],
+
         [
           "Status",
           (
-            estimate?.status || ""
-          ).toUpperCase() || "—",
+            estimate?.status ||
+            ""
+          ).toUpperCase() ||
+            "—",
         ],
+
         [
           "Validity",
           "72 hours",
@@ -1479,10 +2007,13 @@ export async function buildEstimatePDF(
       y
     );
 
+  const estimateItems =
+    estimate?.items || [];
+
   y =
     await drawItemsTable(
       doc,
-      estimate?.items || [],
+      estimateItems,
       y,
       {
         showPrice: true,
@@ -1490,55 +2021,79 @@ export async function buildEstimatePDF(
       }
     );
 
-  const totals = [
-    [
-      "Item Total",
-      formatRupee(
-        estimate?.item_total
-      ),
-      false,
-    ],
-    [
-      "Delivery Charges",
-      formatRupee(
-        estimate?.delivery_charges
-      ),
-      false,
-    ],
-    [
-      "Grand Total",
-      formatRupee(
-        estimate?.grand_total
-      ),
-      false,
-    ],
-    [
-      "Advance Received",
-      formatRupee(
-        estimate?.advance_received
-      ),
-      false,
-    ],
-    [
-      "Remaining",
-      formatRupee(
-        estimate?.remaining
-      ),
-      true,
-    ],
-  ];
+  const itemTotal =
+    firstValidNumber(
+      estimate?.item_total,
+      calculateItemsTotal(
+        estimateItems
+      )
+    );
 
-  y = ensureTotalsSpace(
-    doc,
-    y,
-    totals
-  );
+  const deliveryCharges =
+    firstValidNumber(
+      estimate?.delivery_charges,
+      0
+    );
 
-  drawTotalsBlock(
-    doc,
-    totals,
-    y
-  );
+  const grandTotal =
+    firstValidNumber(
+      estimate?.grand_total,
+      itemTotal +
+        deliveryCharges
+    );
+
+  const advanceReceived =
+    firstValidNumber(
+      estimate?.advance_received,
+      0
+    );
+
+  const remaining =
+    firstValidNumber(
+      estimate?.remaining,
+      Math.max(
+        0,
+        grandTotal -
+          advanceReceived
+      )
+    );
+
+  y =
+    drawTotalsBlock(
+      doc,
+      [
+        [
+          "Item Total",
+          itemTotal,
+          false,
+        ],
+
+        [
+          "Delivery Charges",
+          deliveryCharges,
+          false,
+        ],
+
+        [
+          "Grand Total",
+          grandTotal,
+          false,
+        ],
+
+        [
+          "Advance Received",
+          advanceReceived,
+          false,
+        ],
+
+        [
+          "Remaining",
+          remaining,
+          true,
+        ],
+      ],
+      y
+    );
 
   drawFooter(
     doc,
@@ -1579,22 +2134,31 @@ export async function buildReturnPDF(
               ).toLocaleString()
             : "—",
         ],
+
         [
           "Return No",
-          returnData?.return_no || "—",
+          returnData?.return_no ||
+            "—",
         ],
+
         [
           "Vendor",
-          returnData?.vendor_name || "—",
+          returnData?.vendor_name ||
+            "—",
         ],
+
         [
           "Reason",
-          returnData?.reason || "—",
+          returnData?.reason ||
+            "—",
         ],
+
         [
           "Created By",
-          returnData?.created_by || "—",
+          returnData?.created_by ||
+            "—",
         ],
+
         [
           "Type",
           "Vendor Return",
@@ -1603,10 +2167,13 @@ export async function buildReturnPDF(
       y
     );
 
+  const returnItems =
+    returnData?.items || [];
+
   y =
     await drawItemsTable(
       doc,
-      returnData?.items || [],
+      returnItems,
       y,
       {
         showPrice: true,
@@ -1614,37 +2181,39 @@ export async function buildReturnPDF(
       }
     );
 
-  const totalPieces =
-    calculateTotalPieces(
-      returnData?.items || []
+  const itemTotal =
+    firstValidNumber(
+      returnData?.item_total,
+      calculateItemsTotal(
+        returnItems
+      )
     );
 
-  const totals = [
-    [
-      "Item Total",
-      formatRupee(
-        returnData?.item_total
-      ),
-      true,
-    ],
-    [
-      "Pieces Returned",
-      String(totalPieces),
-      false,
-    ],
-  ];
+  const totalPieces =
+    calculateTotalPieces(
+      returnItems
+    );
 
-  y = ensureTotalsSpace(
-    doc,
-    y,
-    totals
-  );
+  y =
+    drawTotalsBlock(
+      doc,
+      [
+        [
+          "Item Total",
+          itemTotal,
+          true,
+        ],
 
-  drawTotalsBlock(
-    doc,
-    totals,
-    y
-  );
+        [
+          "Pieces Returned",
+          String(
+            totalPieces
+          ),
+          false,
+        ],
+      ],
+      y
+    );
 
   drawFooter(
     doc,
@@ -1705,6 +2274,9 @@ export async function sharePDF(
       }
     );
 
+  /*
+   * Native share
+   */
   if (
     navigator.canShare &&
     navigator.canShare({
@@ -1719,16 +2291,32 @@ export async function sharePDF(
 
       return true;
     } catch {
-      // Continue to download/WhatsApp fallback.
+      /*
+       * Continue to download / WhatsApp fallback.
+       */
     }
   }
 
-  doc.save(finalFilename);
+  /*
+   * Download fallback
+   */
+  doc.save(
+    finalFilename
+  );
 
+  /*
+   * WhatsApp fallback
+   */
   const cleanPhone =
     (phone || "")
-      .replace(/[^\d+]/g, "")
-      .replace(/^\+/, "");
+      .replace(
+        /[^\d+]/g,
+        ""
+      )
+      .replace(
+        /^\+/,
+        ""
+      );
 
   const text =
     encodeURIComponent(
