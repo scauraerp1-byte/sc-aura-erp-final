@@ -1639,7 +1639,7 @@ async function drawProductTable(
         try {
           const imageSize =
             Math.min(
-              34,
+              24,
               imageBox - 2
             );
 
