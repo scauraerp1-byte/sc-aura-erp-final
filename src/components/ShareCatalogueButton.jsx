@@ -5,40 +5,19 @@ import {
 
 import {
   Share2,
+  MessageCircle,
+  X,
+  Smartphone,
 } from "lucide-react";
 
 import {
   prepareCatalogueShare,
   sharePreparedCatalogue,
   sharePreparedCatalogueDesktop,
+  isMobileDevice,
 } from "../lib/share";
 
 import api from "../lib/api";
-
-/* =========================================================
-   MOBILE DETECTION
-========================================================= */
-
-function isMobileDevice() {
-  if (
-    typeof navigator ===
-    "undefined"
-  ) {
-    return false;
-  }
-
-  const ua =
-    navigator.userAgent ||
-    "";
-
-  return /android|iphone|ipad|ipod|mobile/i.test(
-    ua
-  );
-}
-
-/* =========================================================
-   COMPONENT
-========================================================= */
 
 export default function ShareCatalogueButton({
   product,
@@ -47,53 +26,74 @@ export default function ShareCatalogueButton({
   className = "",
   onShared,
 }) {
-  const [busy, setBusy] =
-    useState(false);
-
   const [prepared, setPrepared] =
     useState(null);
 
-  const [prepareError, setPrepareError] =
-    useState("");
+  const [status, setStatus] =
+    useState("preparing");
 
   const [showMenu, setShowMenu] =
     useState(false);
 
+  const [sharing, setSharing] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
   /* =====================================================
-     PREPARE IMAGE BEFORE USER CLICKS
+     PREPARE IN BACKGROUND
   ===================================================== */
 
   useEffect(() => {
     let cancelled = false;
 
-    async function prepare() {
-      setPrepareError("");
+    setPrepared(null);
+    setStatus("preparing");
+    setError("");
 
+    const prepare = async () => {
       try {
         const result =
           await prepareCatalogueShare({
             product,
           });
 
-        if (!cancelled) {
-          setPrepared(
-            result
-          );
+        if (
+          cancelled
+        ) {
+          return;
         }
-      } catch (error) {
-        console.error(
-          "Catalogue preparation failed:",
-          error
+
+        setPrepared(
+          result
         );
 
-        if (!cancelled) {
-          setPrepareError(
-            error?.message ||
-              "Unable to prepare catalogue."
-          );
+        setStatus(
+          "ready"
+        );
+      } catch (err) {
+        console.error(
+          "Catalogue preparation failed:",
+          err
+        );
+
+        if (
+          cancelled
+        ) {
+          return;
         }
+
+        setStatus(
+          "error"
+        );
+
+        setError(
+          err?.message ||
+            "Unable to prepare catalogue."
+        );
       }
-    }
+    };
 
     if (product) {
       prepare();
@@ -105,9 +105,7 @@ export default function ShareCatalogueButton({
   }, [
     product?.id,
     product?.sr_number,
-    product?.image,
-    product?.image_url,
-    product?.imageUrl,
+    product?.title,
   ]);
 
   /* =====================================================
@@ -123,62 +121,60 @@ export default function ShareCatalogueButton({
 
         onShared?.();
       } catch {
-        // Don't break share flow.
+        // Sharing already succeeded.
       }
     };
 
   /* =====================================================
-     MOBILE DIRECT SHARE
+     RETRY
   ===================================================== */
 
-  const handleMobileShare =
-    async () => {
-      if (
-        !prepared ||
-        !prepared.files?.length
-      ) {
-        return;
-      }
-
-      /*
-       * IMPORTANT:
-       *
-       * NO await before this call.
-       *
-       * Native share is invoked
-       * directly from the click event.
-       */
-      const shared =
-        await sharePreparedCatalogue({
-          prepared,
-        });
-
-      if (shared) {
-        await markShared();
-      }
-    };
-
-  /* =====================================================
-     DESKTOP SHARE MENU
-  ===================================================== */
-
-  const openDesktopMenu =
-    (e) => {
+  const retryPrepare =
+    async (e) => {
       e?.preventDefault?.();
       e?.stopPropagation?.();
 
-      if (
-        busy ||
-        !prepared
-      ) {
+      if (sharing) {
         return;
       }
 
-      setShowMenu(true);
+      setStatus(
+        "preparing"
+      );
+
+      setError("");
+
+      try {
+        const result =
+          await prepareCatalogueShare({
+            product,
+          });
+
+        setPrepared(
+          result
+        );
+
+        setStatus(
+          "ready"
+        );
+      } catch (err) {
+        console.error(
+          err
+        );
+
+        setStatus(
+          "error"
+        );
+
+        setError(
+          err?.message ||
+            "Unable to prepare catalogue."
+        );
+      }
     };
 
   /* =====================================================
-     MAIN BUTTON
+     SHARE
   ===================================================== */
 
   const onShare =
@@ -186,18 +182,49 @@ export default function ShareCatalogueButton({
       e?.preventDefault?.();
       e?.stopPropagation?.();
 
+      if (sharing) {
+        return;
+      }
+
+      /*
+       * If preparation is still happening,
+       * don't silently do nothing.
+       */
       if (
-        busy ||
+        status ===
+        "preparing"
+      ) {
+        setError(
+          "Catalogue is still preparing. Please tap again in a moment."
+        );
+
+        return;
+      }
+
+      /*
+       * If preparation failed.
+       */
+      if (
+        status ===
+        "error"
+      ) {
+        await retryPrepare(
+          e
+        );
+
+        return;
+      }
+
+      if (
         !prepared
       ) {
         return;
       }
 
-      /*
-       * MOBILE:
-       *
-       * Direct native share.
-       */
+      /* =================================================
+         MOBILE
+      ================================================= */
+
       if (
         isMobileDevice() &&
         typeof navigator !==
@@ -205,43 +232,52 @@ export default function ShareCatalogueButton({
         typeof navigator.share ===
           "function"
       ) {
-        setBusy(true);
+        setSharing(true);
 
         try {
-          await handleMobileShare();
+          const shared =
+            await sharePreparedCatalogue({
+              prepared,
+            });
+
+          if (shared) {
+            await markShared();
+          }
         } finally {
-          setBusy(false);
+          setSharing(false);
         }
 
         return;
       }
 
-      /*
-       * DESKTOP:
-       * Custom chooser.
-       */
-      openDesktopMenu(e);
+      /* =================================================
+         DESKTOP
+      ================================================= */
+
+      setShowMenu(
+        true
+      );
     };
 
   /* =====================================================
-     DESKTOP DESTINATION
+     DESKTOP SHARE
   ===================================================== */
 
-  const shareTo =
+  const desktopShare =
     async (
       destination
     ) => {
       if (
-        busy ||
-        !prepared
+        !prepared ||
+        sharing
       ) {
         return;
       }
 
-      setBusy(true);
+      setSharing(true);
 
       try {
-        const shared =
+        const result =
           await sharePreparedCatalogueDesktop({
             prepared,
             destination,
@@ -249,77 +285,115 @@ export default function ShareCatalogueButton({
               phone || "",
           });
 
-        setShowMenu(false);
-
-        if (shared) {
+        if (result) {
           await markShared();
         }
-      } catch (error) {
+
+        setShowMenu(
+          false
+        );
+      } catch (err) {
         console.error(
-          "Catalogue sharing failed:",
-          error
+          "Share failed:",
+          err
+        );
+
+        setError(
+          "Unable to share catalogue."
         );
       } finally {
-        setBusy(false);
+        setSharing(false);
       }
     };
 
   /* =====================================================
-     BUTTON TEXT
+     BUTTON STATE
   ===================================================== */
 
-  const buttonText =
-    busy
-      ? "Sharing..."
-      : !prepared
-        ? "Preparing..."
-        : "Share Catalogue";
+  const disabled =
+    sharing;
+
+  let label =
+    "Share Catalogue";
+
+  if (
+    sharing
+  ) {
+    label =
+      "Sharing...";
+  } else if (
+    status ===
+    "preparing"
+  ) {
+    label =
+      "Preparing...";
+  } else if (
+    status ===
+    "error"
+  ) {
+    label =
+      "Retry Share";
+  }
 
   /* =====================================================
-     ICON
+     ICON VARIANT
   ===================================================== */
 
   if (
-    variant === "icon"
+    variant ===
+    "icon"
   ) {
     return (
       <>
         <button
           type="button"
-          onClick={onShare}
-          disabled={
-            busy ||
-            !prepared
+          onClick={
+            onShare
           }
-          data-testid={`share-catalogue-${product?.sr_number || product?.id}`}
-          className={`w-8 h-8 rounded-full glass hover:bg-white/15 grid place-items-center transition ${
-            busy ||
-            !prepared
-              ? "opacity-50 cursor-not-allowed"
+          disabled={
+            disabled
+          }
+          title={
+            status ===
+            "error"
+              ? error
+              : "Share Catalogue"
+          }
+          className={`w-9 h-9 rounded-full glass border border-white/10 hover:bg-white/10 grid place-items-center transition ${
+            disabled
+              ? "opacity-50"
               : ""
           } ${className}`}
-          title={
-            !prepared
-              ? "Preparing catalogue..."
-              : "Share catalogue"
-          }
         >
           <Share2
-            size={15}
+            size={16}
           />
         </button>
 
         {!isMobileDevice() &&
           showMenu && (
-            <DesktopShareMenu
-              product={product}
-              busy={busy}
-              onClose={() =>
-                !busy &&
-                setShowMenu(false)
+            <ShareMenu
+              product={
+                product
               }
-              onSelect={
-                shareTo
+              onClose={() =>
+                !sharing &&
+                setShowMenu(
+                  false
+                )
+              }
+              onWhatsApp={() =>
+                desktopShare(
+                  "whatsapp"
+                )
+              }
+              onOther={() =>
+                desktopShare(
+                  "other"
+                )
+              }
+              sharing={
+                sharing
               }
             />
           )}
@@ -328,48 +402,77 @@ export default function ShareCatalogueButton({
   }
 
   /* =====================================================
-     DEFAULT
+     DEFAULT BUTTON
   ===================================================== */
 
   return (
     <>
       <button
         type="button"
-        onClick={onShare}
-        disabled={
-          busy ||
-          !prepared
+        onClick={
+          onShare
         }
-        data-testid={`share-catalogue-${product?.sr_number || product?.id}`}
-        className={`rounded-full glass px-4 py-2.5 text-xs uppercase tracking-[0.18em] hover:bg-white/10 inline-flex items-center justify-center gap-2 transition ${
-          busy ||
-          !prepared
+        disabled={
+          disabled
+        }
+        className={`group relative overflow-hidden rounded-full px-5 py-3 inline-flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-[0.16em] transition-all duration-200 ${
+          status ===
+          "ready"
+            ? "bg-[#d4af37] text-black hover:bg-[#ebd281] shadow-[0_8px_25px_rgba(212,175,55,0.18)]"
+            : "glass text-white/70 border border-white/10"
+        } ${
+          disabled
             ? "opacity-50 cursor-not-allowed"
             : ""
         } ${className}`}
-        title={
-          prepareError ||
-          ""
-        }
       >
         <Share2
-          size={14}
+          size={15}
+          className={
+            status ===
+            "preparing"
+              ? "animate-pulse"
+              : ""
+          }
         />
 
-        {buttonText}
+        <span>
+          {label}
+        </span>
       </button>
+
+      {error &&
+        status ===
+          "error" && (
+          <div className="mt-2 text-[10px] text-red-300 max-w-xs">
+            {error}
+          </div>
+        )}
 
       {!isMobileDevice() &&
         showMenu && (
-          <DesktopShareMenu
-            product={product}
-            busy={busy}
-            onClose={() =>
-              !busy &&
-              setShowMenu(false)
+          <ShareMenu
+            product={
+              product
             }
-            onSelect={
-              shareTo
+            onClose={() =>
+              !sharing &&
+              setShowMenu(
+                false
+              )
+            }
+            onWhatsApp={() =>
+              desktopShare(
+                "whatsapp"
+              )
+            }
+            onOther={() =>
+              desktopShare(
+                "other"
+              )
+            }
+            sharing={
+              sharing
             }
           />
         )}
@@ -381,127 +484,74 @@ export default function ShareCatalogueButton({
    DESKTOP SHARE MENU
 ========================================================= */
 
-function DesktopShareMenu({
+function ShareMenu({
   product,
-  busy,
   onClose,
-  onSelect,
+  onWhatsApp,
+  onOther,
+  sharing,
 }) {
   const image =
+    product?.images?.[0] ||
     product?.image ||
     product?.image_url ||
     product?.imageUrl ||
-    product?.product_image ||
-    product?.productImage ||
-    product?.photo ||
-    product?.photo_url ||
-    product?.thumbnail ||
-    product?.thumbnail_url;
+    null;
 
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={() =>
-        !busy &&
+        !sharing &&
         onClose()
       }
     >
       <div
-        className="w-full max-w-sm rounded-3xl glass border border-white/10 p-5 shadow-2xl"
+        className="w-full max-w-sm rounded-[28px] bg-[#11151f] border border-white/10 shadow-2xl p-5"
         onClick={(e) =>
           e.stopPropagation()
         }
       >
-        {/* HEADER */}
+        {/* Header */}
 
         <div className="flex items-center justify-between mb-5">
           <div>
-            <div className="font-display text-xl text-white">
+            <div className="text-white text-lg font-semibold">
               Share Catalogue
             </div>
 
-            <div className="text-xs text-white/40 mt-1">
-              Where do you want to share it?
+            <div className="text-white/40 text-xs mt-1">
+              Choose where to share
             </div>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-white text-lg"
+            onClick={
+              onClose
+            }
+            disabled={
+              sharing
+            }
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center"
           >
-            ×
+            <X
+              size={17}
+            />
           </button>
         </div>
 
-        {/* WHATSAPP */}
+        {/* Product preview */}
 
-        <button
-          type="button"
-          onClick={() =>
-            onSelect(
-              "whatsapp"
-            )
-          }
-          disabled={busy}
-          className="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black p-4 flex items-center gap-4 transition disabled:opacity-50"
-        >
-          <div className="w-11 h-11 rounded-full bg-black/10 grid place-items-center text-xl">
-            💬
-          </div>
-
-          <div className="text-left">
-            <div className="font-semibold">
-              WhatsApp
-            </div>
-
-            <div className="text-xs opacity-70 mt-1">
-              Share product image & details
-            </div>
-          </div>
-        </button>
-
-        {/* OTHER */}
-
-        <button
-          type="button"
-          onClick={() =>
-            onSelect(
-              "other"
-            )
-          }
-          disabled={busy}
-          className="w-full mt-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 flex items-center gap-4 transition disabled:opacity-50"
-        >
-          <div className="w-11 h-11 rounded-full bg-white/10 grid place-items-center">
-            <Share2
-              size={20}
-            />
-          </div>
-
-          <div className="text-left">
-            <div className="font-semibold">
-              Other
-            </div>
-
-            <div className="text-xs text-white/40 mt-1">
-              Use device share options
-            </div>
-          </div>
-        </button>
-
-        {/* PRODUCT PREVIEW */}
-
-        <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-3">
+        <div className="flex items-center gap-3 rounded-2xl bg-white/[0.03] border border-white/5 p-3 mb-4">
           {image ? (
             <img
               src={image}
               alt=""
-              className="w-12 h-12 rounded-xl object-cover"
+              className="w-14 h-14 rounded-xl object-cover"
             />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-white/5" />
+            <div className="w-14 h-14 rounded-xl bg-white/5" />
           )}
 
           <div className="min-w-0">
@@ -510,11 +560,69 @@ function DesktopShareMenu({
                 "Product"}
             </div>
 
-            <div className="text-[10px] uppercase tracking-[0.15em] text-[#ebd281] mt-1">
+            <div className="text-[10px] text-[#ebd281] uppercase tracking-[0.18em] mt-1">
               {product?.sr_number ||
                 ""}
             </div>
           </div>
+        </div>
+
+        {/* WhatsApp */}
+
+        <button
+          type="button"
+          onClick={
+            onWhatsApp
+          }
+          disabled={
+            sharing
+          }
+          className="w-full rounded-2xl bg-[#25D366] text-black p-4 flex items-center gap-3 hover:brightness-105 transition disabled:opacity-50"
+        >
+          <MessageCircle
+            size={21}
+          />
+
+          <div className="text-left">
+            <div className="font-semibold">
+              WhatsApp
+            </div>
+
+            <div className="text-[11px] opacity-60 mt-0.5">
+              Share product catalogue
+            </div>
+          </div>
+        </button>
+
+        {/* Other */}
+
+        <button
+          type="button"
+          onClick={
+            onOther
+          }
+          disabled={
+            sharing
+          }
+          className="w-full mt-3 rounded-2xl bg-white/5 border border-white/10 text-white p-4 flex items-center gap-3 hover:bg-white/10 transition disabled:opacity-50"
+        >
+          <Smartphone
+            size={21}
+          />
+
+          <div className="text-left">
+            <div className="font-semibold">
+              Other
+            </div>
+
+            <div className="text-[11px] text-white/40 mt-0.5">
+              Device sharing options
+            </div>
+          </div>
+        </button>
+
+        <div className="text-center text-[9px] text-white/25 uppercase tracking-[0.18em] mt-5">
+          Image + SCA code + product details
         </div>
       </div>
     </div>
