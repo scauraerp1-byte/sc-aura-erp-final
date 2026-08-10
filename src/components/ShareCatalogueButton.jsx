@@ -1,9 +1,36 @@
 import { useState } from "react";
-import { Share2, MessageCircle, X } from "lucide-react";
+import { Share2 } from "lucide-react";
 import {
   shareCatalogue,
 } from "../lib/share";
 import api from "../lib/api";
+
+/* =========================================================
+   MOBILE DETECTION
+========================================================= */
+
+function isMobileDevice() {
+  if (
+    typeof navigator ===
+    "undefined"
+  ) {
+    return false;
+  }
+
+  const ua =
+    navigator.userAgent ||
+    navigator.vendor ||
+    window.opera ||
+    "";
+
+  return /android|iphone|ipad|ipod|mobile/i.test(
+    ua
+  );
+}
+
+/* =========================================================
+   SHARE CATALOGUE BUTTON
+========================================================= */
 
 export default function ShareCatalogueButton({
   product,
@@ -15,7 +42,7 @@ export default function ShareCatalogueButton({
   const [busy, setBusy] =
     useState(false);
 
-  const [showShareMenu, setShowShareMenu] =
+  const [showMenu, setShowMenu] =
     useState(false);
 
   /* =====================================================
@@ -33,32 +60,76 @@ export default function ShareCatalogueButton({
       } catch {
         /*
          * Sharing already happened.
-         * Don't break the UI if marking fails.
+         * Don't break UI.
          */
       }
     };
 
   /* =====================================================
-     OPEN SHARE MENU
+     PREPARE PRODUCT
   ===================================================== */
 
-  const onShare = async (e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+  const getCatalogueProduct =
+    () => {
+      const sizes =
+        product?.size_preset ||
+        (
+          product?.available_sizes ||
+          []
+        ).join(", ");
 
-    if (busy) {
-      return;
-    }
+      const image =
+        product?.image ||
+        product?.image_url ||
+        product?.imageUrl ||
+        product?.product_image ||
+        product?.productImage ||
+        product?.photo ||
+        product?.photo_url ||
+        product?.thumbnail ||
+        product?.thumbnail_url ||
+        null;
 
-    setShowShareMenu(true);
-  };
+      return {
+        ...product,
+
+        image,
+
+        sr_number:
+          product?.sr_number ||
+          "",
+
+        title:
+          product?.title ||
+          "",
+
+        category:
+          product?.category ||
+          "",
+
+        size_preset:
+          sizes,
+
+        price:
+          product?.price ||
+          0,
+
+        description:
+          product?.description ||
+          "",
+
+        available_sizes:
+          product?.available_sizes ||
+          [],
+      };
+    };
 
   /* =====================================================
-     ACTUAL SHARE DESTINATION
+     MOBILE DIRECT SHARE
   ===================================================== */
 
-  const shareTo =
-    async (destination) => {
+  const shareMobile =
+    async () => {
       if (busy) {
         return;
       }
@@ -66,69 +137,68 @@ export default function ShareCatalogueButton({
       setBusy(true);
 
       try {
-        /*
-         * PRODUCT SIZES
-         */
-        const sizes =
-          product?.size_preset ||
-          (
-            product?.available_sizes ||
-            []
-          ).join(", ");
+        const catalogueProduct =
+          getCatalogueProduct();
 
-        /*
-         * PRODUCT IMAGE
-         */
-        const image =
-          product?.image ||
-          product?.image_url ||
-          product?.imageUrl ||
-          product?.product_image ||
-          product?.productImage ||
-          product?.photo ||
-          product?.photo_url ||
-          product?.thumbnail ||
-          product?.thumbnail_url ||
-          null;
+        const shared =
+          await shareCatalogue({
+            product:
+              catalogueProduct,
 
-        /*
-         * PRODUCT OBJECT
-         */
-        const catalogueProduct = {
-          ...product,
+            phone:
+              phone || "",
 
-          image,
+            destination:
+              "mobile",
+          });
 
-          sr_number:
-            product?.sr_number || "",
+        if (shared) {
+          await markShared();
+        }
+      } catch (error) {
+        console.error(
+          "Mobile catalogue sharing failed:",
+          error
+        );
+      } finally {
+        setBusy(false);
+      }
+    };
 
-          title:
-            product?.title || "",
+  /* =====================================================
+     DESKTOP MENU
+  ===================================================== */
 
-          category:
-            product?.category || "",
+  const openMenu =
+    (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
 
-          size_preset:
-            sizes,
+      if (busy) {
+        return;
+      }
 
-          price:
-            product?.price || 0,
+      setShowMenu(true);
+    };
 
-          description:
-            product?.description || "",
+  /* =====================================================
+     SHARE DESTINATION
+  ===================================================== */
 
-          available_sizes:
-            product?.available_sizes ||
-            [],
-        };
+  const shareTo =
+    async (
+      destination
+    ) => {
+      if (busy) {
+        return;
+      }
 
-        /*
-         * ACTUAL SHARE
-         *
-         * IMPORTANT:
-         * Singular "product" is intentional.
-         * Do NOT change this to "products".
-         */
+      setBusy(true);
+
+      try {
+        const catalogueProduct =
+          getCatalogueProduct();
+
         const shared =
           await shareCatalogue({
             product:
@@ -140,7 +210,7 @@ export default function ShareCatalogueButton({
             destination,
           });
 
-        setShowShareMenu(false);
+        setShowMenu(false);
 
         if (shared) {
           await markShared();
@@ -153,6 +223,45 @@ export default function ShareCatalogueButton({
       } finally {
         setBusy(false);
       }
+    };
+
+  /* =====================================================
+     MAIN CLICK
+  ===================================================== */
+
+  const onShare =
+    async (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+
+      if (busy) {
+        return;
+      }
+
+      /*
+       * MOBILE:
+       *
+       * NO CUSTOM POPUP.
+       *
+       * Directly call native
+       * Android / iPhone share.
+       */
+      if (
+        isMobileDevice() &&
+        typeof navigator !==
+          "undefined" &&
+        typeof navigator.share ===
+          "function"
+      ) {
+        await shareMobile();
+        return;
+      }
+
+      /*
+       * DESKTOP:
+       * show our chooser.
+       */
+      openMenu(e);
     };
 
   /* =====================================================
@@ -174,26 +283,31 @@ export default function ShareCatalogueButton({
               ? "opacity-50 cursor-not-allowed"
               : ""
           } ${className}`}
-          title="Share catalogue"
+          title={
+            busy
+              ? "Preparing catalogue..."
+              : "Share catalogue"
+          }
         >
           <Share2
             size={15}
           />
         </button>
 
-        {showShareMenu && (
-          <ShareMenu
-            busy={busy}
-            product={product}
-            onClose={() =>
-              !busy &&
-              setShowShareMenu(false)
-            }
-            onSelect={
-              shareTo
-            }
-          />
-        )}
+        {!isMobileDevice() &&
+          showMenu && (
+            <ShareMenu
+              busy={busy}
+              product={product}
+              onClose={() =>
+                !busy &&
+                setShowMenu(false)
+              }
+              onSelect={
+                shareTo
+              }
+            />
+          )}
       </>
     );
   }
@@ -224,25 +338,26 @@ export default function ShareCatalogueButton({
           : "Share Catalogue"}
       </button>
 
-      {showShareMenu && (
-        <ShareMenu
-          busy={busy}
-          product={product}
-          onClose={() =>
-            !busy &&
-            setShowShareMenu(false)
-          }
-          onSelect={
-            shareTo
-          }
-        />
-      )}
+      {!isMobileDevice() &&
+        showMenu && (
+          <ShareMenu
+            busy={busy}
+            product={product}
+            onClose={() =>
+              !busy &&
+              setShowMenu(false)
+            }
+            onSelect={
+              shareTo
+            }
+          />
+        )}
     </>
   );
 }
 
 /* =========================================================
-   SHARE MENU
+   DESKTOP SHARE MENU
 ========================================================= */
 
 function ShareMenu({
@@ -282,11 +397,9 @@ function ShareMenu({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center"
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-white"
           >
-            <X
-              size={16}
-            />
+            ×
           </button>
         </div>
 
@@ -303,9 +416,9 @@ function ShareMenu({
           className="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black p-4 flex items-center gap-4 transition disabled:opacity-50"
         >
           <div className="w-11 h-11 rounded-full bg-black/10 grid place-items-center">
-            <MessageCircle
-              size={21}
-            />
+            <span className="text-xl">
+              💬
+            </span>
           </div>
 
           <div className="text-left">
@@ -348,7 +461,7 @@ function ShareMenu({
           </div>
         </button>
 
-        {/* PRODUCT PREVIEW */}
+        {/* PRODUCT */}
 
         <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-3">
           {(
