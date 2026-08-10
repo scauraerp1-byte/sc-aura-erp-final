@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import { Share2 } from "lucide-react";
 
 import {
@@ -16,14 +20,14 @@ export default function ShareCatalogueButton({
   className = "",
   onShared,
 }) {
-  const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [busy, setBusy] =
+    useState(false);
+
+  const [ready, setReady] =
+    useState(false);
 
   /* =====================================================
-     PREPARE CATALOGUE IN BACKGROUND
-     
-     This runs BEFORE the user presses Share.
-     So mobile native share can open immediately.
+     PREPARE IMAGE IN BACKGROUND
   ===================================================== */
 
   useEffect(() => {
@@ -34,16 +38,22 @@ export default function ShareCatalogueButton({
     }
 
     const existing =
-      getPreparedCatalogue(product);
+      getPreparedCatalogue(
+        product
+      );
 
     if (existing) {
       setReady(true);
       return;
     }
 
-    preloadCatalogueShare(product)
+    preloadCatalogueShare(
+      product
+    )
       .then((prepared) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         if (prepared) {
           setReady(true);
@@ -51,7 +61,7 @@ export default function ShareCatalogueButton({
       })
       .catch((error) => {
         console.error(
-          "Catalogue preload error:",
+          "Catalogue preload failed:",
           error
         );
       });
@@ -62,95 +72,91 @@ export default function ShareCatalogueButton({
   }, [
     product?.id,
     product?.sr_number,
+    product?.image,
+    product?.image_url,
   ]);
 
   /* =====================================================
-     MARK PRODUCT AS SHARED
+     MARK SHARED
   ===================================================== */
 
-  const markShared = async () => {
-    try {
-      await api.post(
-        `/products/${product.id}/mark-shared`
-      );
+  const markShared =
+    async () => {
+      try {
+        await api.post(
+          `/products/${product.id}/mark-shared`
+        );
 
-      onShared?.();
-    } catch (error) {
-      /*
-       * Sharing already happened.
-       * Do not break UI if API marking fails.
-       */
-      console.error(
-        "Mark shared failed:",
-        error
-      );
-    }
-  };
+        onShared?.();
+      } catch (error) {
+        /*
+         * Sharing has already happened.
+         * Don't break the UI.
+         */
+        console.error(
+          "Mark shared failed:",
+          error
+        );
+      }
+    };
 
   /* =====================================================
      SHARE
   ===================================================== */
 
-  const onShare = async (e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+  const onShare =
+    async (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
 
-    if (busy || !product) {
-      return;
-    }
-
-    /*
-     * IMPORTANT:
-     *
-     * Do NOT await anything before shareCatalogue().
-     *
-     * If preload is complete, shareCatalogue()
-     * immediately calls navigator.share().
-     */
-
-    setBusy(true);
-
-    try {
-      const shared =
-        await shareCatalogue({
-          product,
-          phone: phone || "",
-          destination: "mobile",
-        });
-
-      if (shared) {
-        await markShared();
+      if (
+        busy ||
+        !product
+      ) {
+        return;
       }
 
-      /*
-       * If sharing wasn't ready yet,
-       * start preparing again in background
-       * for the next attempt.
-       */
-      if (!shared) {
-        preloadCatalogueShare(product)
-          .then((prepared) => {
-            if (prepared) {
-              setReady(true);
-            }
-          })
-          .catch(() => {});
+      setBusy(true);
+
+      try {
+        /*
+         * IMPORTANT:
+         *
+         * shareCatalogue uses the already
+         * prepared File from cache.
+         *
+         * No catalogue URL.
+         * No text-only fallback.
+         */
+        const shared =
+          await shareCatalogue({
+            product,
+            phone:
+              phone || "",
+            destination:
+              "mobile",
+          });
+
+        if (shared) {
+          await markShared();
+        }
+      } catch (error) {
+        console.error(
+          "Catalogue sharing failed:",
+          error
+        );
+      } finally {
+        setBusy(false);
       }
-    } catch (error) {
-      console.error(
-        "Catalogue sharing failed:",
-        error
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
+    };
 
   /* =====================================================
-     ICON BUTTON
+     ICON
   ===================================================== */
 
-  if (variant === "icon") {
+  if (
+    variant === "icon"
+  ) {
     return (
       <button
         type="button"
@@ -162,25 +168,30 @@ export default function ShareCatalogueButton({
           "product"
         }`}
         className={`
-          w-9 h-9
+          w-9
+          h-9
           rounded-full
           glass
           hover:bg-white/15
           grid
           place-items-center
           transition
-          ${busy ? "opacity-50 cursor-not-allowed" : ""}
+          ${
+            busy
+              ? "opacity-50 cursor-not-allowed"
+              : ""
+          }
           ${className}
         `}
         title={
           busy
             ? "Sharing..."
-            : ready
-            ? "Share catalogue"
-            : "Preparing catalogue"
+            : "Share catalogue"
         }
       >
-        <Share2 className="w-4 h-4" />
+        <Share2
+          className="w-4 h-4"
+        />
       </button>
     );
   }
@@ -213,11 +224,17 @@ export default function ShareCatalogueButton({
         justify-center
         gap-2
         transition
-        ${busy ? "opacity-50 cursor-not-allowed" : ""}
+        ${
+          busy
+            ? "opacity-50 cursor-not-allowed"
+            : ""
+        }
         ${className}
       `}
     >
-      <Share2 className="w-4 h-4" />
+      <Share2
+        className="w-4 h-4"
+      />
 
       {busy
         ? "Sharing..."
