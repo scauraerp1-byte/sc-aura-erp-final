@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import api from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import { GlassCard, SectionTitle, Pill } from "../components/Primitives";
 import {
   Package,
@@ -18,6 +18,8 @@ import {
   X,
   Loader2,
 } from "lucide-react";
+import { cachedGet } from "../lib/dataCache";
+import api from "../lib/api";
 import QRScanner from "../components/QRScanner";
 import { useBodyLock } from "../hooks/useBodyLock";
 import useEscapeClose from "../hooks/useEscapeClose";
@@ -35,11 +37,13 @@ function StatTile({
       data-testid={testid}
       onClick={onClick}
       className={`text-left glass rounded-2xl p-4 sm:p-5 transition-all hover:bg-white/[0.07] active:scale-[0.99] ${
-        accent ? "border-[#d4af37]/30" : ""
+        accent
+          ? "border-[#d4af37]/30"
+          : ""
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-white/45">
+        <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-[var(--sca-text-muted)]">
           {label}
         </span>
 
@@ -54,13 +58,7 @@ function StatTile({
         )}
       </div>
 
-      <div
-        className={`font-display text-2xl sm:text-3xl mt-2 tracking-tight ${
-          accent
-            ? "gold-text"
-            : "text-white"
-        }`}
-      >
+      <div className="font-display text-2xl sm:text-3xl mt-2 tracking-tight text-[var(--sca-text)]">
         {value}
       </div>
     </button>
@@ -80,22 +78,27 @@ function QuickAction({
   return (
     <button
       data-testid={testid}
-      onClick={() =>
-        onClick
-          ? onClick()
-          : navigate(to)
-      }
-      className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-100 ${
+      onClick={() => {
+        if (onClick) {
+          onClick();
+          return;
+        }
+
+        if (to) {
+          navigate(to);
+        }
+      }}
+      className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-left transition-colors hover:bg-white/[0.07] ${
         accent
-          ? "bg-gradient-to-br from-[#d4af37] to-[#ebd281] text-black border-[#d4af37]"
-          : "glass border-white/10 hover:bg-white/10"
+          ? "bg-[var(--sca-primary)] text-white border-[var(--sca-primary)]"
+          : "glass border-white/10"
       }`}
     >
       <Icon
         className={`w-4 h-4 ${
           accent
-            ? "text-black"
-            : "text-[#ebd281]"
+            ? "text-white"
+            : "text-[var(--sca-text-soft)]"
         }`}
       />
 
@@ -109,7 +112,8 @@ function QuickAction({
 export default function Dashboard() {
   const { user } = useAuth();
 
-  const [data, setData] = useState(null);
+  const [data, setData] =
+    useState(null);
 
   const [scanOpen, setScanOpen] =
     useState(false);
@@ -126,25 +130,42 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api
-      .get("/analytics/home")
-      .then((r) => setData(r.data))
+    let mounted = true;
+
+    cachedGet(
+      "analytics:home",
+      "/analytics/home",
+      {
+        ttl: 60_000,
+        onFresh: (fresh) => {
+          if (mounted) {
+            setData(fresh);
+          }
+        },
+      }
+    )
+      .then((d) => {
+        if (mounted) {
+          setData(d);
+        }
+      })
       .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  /*
-   * OPEN SCANNER
-   */
+  /* =========================================================
+     SCAN SR
+  ========================================================= */
+
   const openScanner = () => {
     setScanError("");
     setScannedProduct(null);
     setScanOpen(true);
   };
 
-  /*
-   * QRScanner returns SR number.
-   * Fetch actual product from backend.
-   */
   const handleScan = async (text) => {
     const code = String(text || "")
       .trim()
@@ -166,7 +187,7 @@ export default function Dashboard() {
         );
 
       setScannedProduct(product);
-    } catch (e) {
+    } catch {
       setScanError(
         `No product found with SR ${code}`
       );
@@ -175,15 +196,12 @@ export default function Dashboard() {
     }
   };
 
-  const closeProduct = () => {
+  const closeScannedProduct = () => {
     setScannedProduct(null);
     setScanError("");
   };
 
-  /*
-   * BOOKING
-   */
-  const createBooking = () => {
+  const goBooking = () => {
     if (!scannedProduct) return;
 
     navigate("/bookings/new", {
@@ -196,13 +214,10 @@ export default function Dashboard() {
     setScannedProduct(null);
   };
 
-  /*
-   * ESTIMATE
-   */
-  const createEstimate = () => {
+  const goDispatch = () => {
     if (!scannedProduct) return;
 
-    navigate("/estimates/new", {
+    navigate("/dispatch/new", {
       state: {
         preselectProduct:
           scannedProduct,
@@ -212,13 +227,10 @@ export default function Dashboard() {
     setScannedProduct(null);
   };
 
-  /*
-   * DISPATCH
-   */
-  const createDispatch = () => {
+  const goEstimate = () => {
     if (!scannedProduct) return;
 
-    navigate("/dispatch/new", {
+    navigate("/estimates/new", {
       state: {
         preselectProduct:
           scannedProduct,
@@ -257,10 +269,10 @@ export default function Dashboard() {
   return (
     <>
       <div className="space-y-7">
-        {/* Greeting */}
+        {/* GREETING */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.3em] text-[#ebd281]">
+            <div className="text-[10px] uppercase tracking-[0.3em] brand-text">
               {getOverline(role)}
             </div>
 
@@ -269,13 +281,13 @@ export default function Dashboard() {
               {user.name.split(" ")[0]}.
             </h1>
 
-            <p className="text-sm text-white/55 mt-1">
+            <p className="text-sm text-[var(--sca-text-muted)] mt-1">
               Wholesale operations at a glance.
             </p>
           </div>
         </div>
 
-        {/* Quick actions */}
+        {/* QUICK ACTIONS */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
           <QuickAction
             label="New Booking"
@@ -324,7 +336,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Stats */}
+        {/* STATS */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <StatTile
             testid="stat-revenue-today"
@@ -414,7 +426,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Analytics */}
+        {/* ANALYTICS */}
         {canAnalytics && (
           <GlassCard>
             <SectionTitle
@@ -433,14 +445,15 @@ export default function Dashboard() {
 
             <div className="text-sm text-white/60 flex items-center gap-3">
               <BarChart3 className="w-4 h-4 text-[#ebd281]" />
-              Revenue, top vendors, fast/slow
-              movers, returns, sales by day —
-              all in one place.
+
+              Revenue, top vendors,
+              fast/slow movers, returns,
+              sales by day — all in one place.
             </div>
           </GlassCard>
         )}
 
-        {/* Recent + Low stock */}
+        {/* RECENT + LOW STOCK */}
         <div className="grid lg:grid-cols-3 gap-4">
           <GlassCard className="lg:col-span-2">
             <SectionTitle
@@ -458,8 +471,8 @@ export default function Dashboard() {
             />
 
             <div className="divide-y divide-white/5">
-              {data.recent_dispatches.length ===
-                0 && (
+              {data.recent_dispatches
+                .length === 0 && (
                 <div className="text-sm text-white/50 py-6 text-center">
                   No dispatches yet.
                 </div>
@@ -486,7 +499,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="text-right flex items-center gap-3">
-                      <div className="text-sm gold-text font-display">
+                      <div className="text-sm font-display tabular-nums">
                         ₹
                         {Number(
                           d.amount || 0
@@ -562,7 +575,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="text-sm gold-text font-display">
+                  <div className="text-sm font-display tabular-nums">
                     {p.quantity}
                   </div>
                 </Link>
@@ -570,6 +583,7 @@ export default function Dashboard() {
             </div>
           </GlassCard>
 
+          {/* ACTIVITY */}
           <GlassCard className="lg:col-span-3">
             <SectionTitle
               overline="Timeline"
@@ -598,8 +612,7 @@ export default function Dashboard() {
                     const color =
                       ev.kind === "dispatch"
                         ? "bg-[#d4af37]"
-                        : ev.kind ===
-                          "booking"
+                        : ev.kind === "booking"
                         ? "bg-amber-300"
                         : ev.kind ===
                           "estimate"
@@ -643,7 +656,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* QR SCANNER */}
+      {/* =====================================================
+          QR SCANNER
+      ===================================================== */}
+
       <QRScanner
         open={scanOpen}
         onClose={() =>
@@ -652,7 +668,10 @@ export default function Dashboard() {
         onScan={handleScan}
       />
 
-      {/* PRODUCT RESULT */}
+      {/* =====================================================
+          SCANNED PRODUCT MODAL
+      ===================================================== */}
+
       {(productLoading ||
         scannedProduct ||
         scanError) && (
@@ -660,15 +679,19 @@ export default function Dashboard() {
           loading={productLoading}
           product={scannedProduct}
           error={scanError}
-          onClose={closeProduct}
-          onBooking={createBooking}
-          onDispatch={createDispatch}
-          onEstimate={createEstimate}
+          onClose={closeScannedProduct}
+          onBooking={goBooking}
+          onDispatch={goDispatch}
+          onEstimate={goEstimate}
         />
       )}
     </>
   );
 }
+
+/* =========================================================
+   SCANNED PRODUCT MODAL
+========================================================= */
 
 function ScannedProductModal({
   loading,
@@ -679,12 +702,31 @@ function ScannedProductModal({
   onDispatch,
   onEstimate,
 }) {
+  const { theme } = useTheme();
+  const isLight = theme === "light";
+
   useBodyLock(true);
   useEscapeClose(onClose, true);
 
+  const modalBg = isLight
+    ? "#ffffff"
+    : "#11151d";
+
+  const mainText = isLight
+    ? "#111827"
+    : "#ffffff";
+
+  const mutedText = isLight
+    ? "#6b7280"
+    : "rgba(255,255,255,0.50)";
+
+  const border = isLight
+    ? "#d1d5db"
+    : "rgba(255,255,255,0.15)";
+
   return (
     <div
-      className="fixed inset-0 z-[110] bg-black/65 backdrop-blur-sm grid place-items-center p-4"
+      className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
       onClick={(e) => {
         if (
           e.target === e.currentTarget
@@ -695,15 +737,39 @@ function ScannedProductModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md max-h-[90dvh] overflow-hidden rounded-2xl border border-white/15 bg-[#11151d] text-white shadow-2xl">
+      <div
+        className="w-full max-w-md max-h-[90dvh] overflow-hidden rounded-2xl border shadow-2xl"
+        style={{
+          background: modalBg,
+          color: mainText,
+          borderColor: border,
+        }}
+      >
         {/* HEADER */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b"
+          style={{
+            borderColor: border,
+          }}
+        >
           <div>
-            <div className="text-[10px] uppercase tracking-[0.28em] text-[#ebd281]">
+            <div
+              className="text-[10px] uppercase tracking-[0.28em]"
+              style={{
+                color: isLight
+                  ? "#9a7200"
+                  : "#d4af37",
+              }}
+            >
               QR / SR Scanner
             </div>
 
-            <h3 className="font-display text-xl mt-1 text-white">
+            <h3
+              className="font-display text-xl mt-1"
+              style={{
+                color: mainText,
+              }}
+            >
               {loading
                 ? "Finding Product…"
                 : product
@@ -716,18 +782,39 @@ function ScannedProductModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="w-9 h-9 rounded-full grid place-items-center bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+            className="w-10 h-10 rounded-full grid place-items-center border"
+            style={{
+              background: isLight
+                ? "#111827"
+                : "#ffffff",
+              color: isLight
+                ? "#ffffff"
+                : "#111827",
+              borderColor: isLight
+                ? "#111827"
+                : "#ffffff",
+            }}
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* LOADING */}
         {loading && (
           <div className="py-14 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-7 h-7 text-[#ebd281] animate-spin" />
+            <Loader2
+              className="w-7 h-7 animate-spin"
+              style={{
+                color: "#d4af37",
+              }}
+            />
 
-            <div className="text-sm text-white/60">
+            <div
+              className="text-sm"
+              style={{
+                color: mutedText,
+              }}
+            >
               Fetching product details…
             </div>
           </div>
@@ -738,8 +825,23 @@ function ScannedProductModal({
           error &&
           !product && (
             <div className="p-5">
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-                <div className="text-sm text-red-200">
+              <div
+                className="rounded-xl p-4"
+                style={{
+                  background:
+                    "rgba(239,68,68,0.08)",
+                  border:
+                    "1px solid rgba(239,68,68,0.25)",
+                }}
+              >
+                <div
+                  className="text-sm"
+                  style={{
+                    color: isLight
+                      ? "#b91c1c"
+                      : "#fecaca",
+                  }}
+                >
                   {error}
                 </div>
               </div>
@@ -747,7 +849,15 @@ function ScannedProductModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full rounded-full bg-white text-black py-2.5 mt-4 text-xs uppercase tracking-[0.2em] font-medium hover:bg-white/90"
+                className="w-full rounded-full py-2.5 mt-4 text-xs uppercase tracking-[0.2em] font-medium"
+                style={{
+                  background: isLight
+                    ? "#111827"
+                    : "#ffffff",
+                  color: isLight
+                    ? "#ffffff"
+                    : "#111827",
+                }}
               >
                 Close
               </button>
@@ -756,10 +866,28 @@ function ScannedProductModal({
 
         {/* PRODUCT */}
         {!loading && product && (
-          <div className="p-5 overflow-y-auto max-h-[calc(90dvh-82px)]">
+          <div
+            className="p-5 overflow-y-auto"
+            style={{
+              maxHeight:
+                "calc(90dvh - 82px)",
+            }}
+          >
             <div className="flex gap-4">
               {/* IMAGE */}
-              <div className="w-24 h-28 rounded-xl overflow-hidden bg-white/[0.06] border border-white/10 flex-shrink-0">
+              <div
+                className="w-24 h-28 rounded-xl overflow-hidden flex-shrink-0"
+                style={{
+                  background: isLight
+                    ? "#f3f4f6"
+                    : "rgba(255,255,255,0.06)",
+                  border: `1px solid ${
+                    isLight
+                      ? "#d1d5db"
+                      : "rgba(255,255,255,0.10)"
+                  }`,
+                }}
+              >
                 {product.images?.[0] ? (
                   <img
                     src={product.images[0]}
@@ -768,36 +896,88 @@ function ScannedProductModal({
                   />
                 ) : (
                   <div className="w-full h-full grid place-items-center">
-                    <Package className="w-8 h-8 text-white/20" />
+                    <Package
+                      className="w-8 h-8"
+                      style={{
+                        color: isLight
+                          ? "#9ca3af"
+                          : "rgba(255,255,255,0.20)",
+                      }}
+                    />
                   </div>
                 )}
               </div>
 
               {/* INFO */}
-              <div className="min-w-0 flex-1 pt-0.5">
-                <div className="text-[10px] font-mono-receipt font-medium text-[#ebd281]">
+              <div className="min-w-0 flex-1">
+                <div
+                  className="text-[10px] font-mono-receipt font-semibold"
+                  style={{
+                    color: isLight
+                      ? "#9a7200"
+                      : "#ebd281",
+                  }}
+                >
                   {product.sr_number}
                 </div>
 
-                <div className="text-lg font-semibold text-white mt-1 leading-snug">
+                <div
+                  className="text-lg font-semibold mt-1 leading-snug"
+                  style={{
+                    color: mainText,
+                  }}
+                >
                   {product.title}
                 </div>
 
                 <div className="flex flex-wrap gap-2 mt-3">
                   {product.category && (
-                    <span className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-[10px] font-medium text-white/80">
+                    <span
+                      className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-medium border"
+                      style={{
+                        background: isLight
+                          ? "#f3f4f6"
+                          : "rgba(255,255,255,0.06)",
+                        color: isLight
+                          ? "#374151"
+                          : "rgba(255,255,255,0.80)",
+                        borderColor: isLight
+                          ? "#d1d5db"
+                          : "rgba(255,255,255,0.15)",
+                      }}
+                    >
                       {product.category}
                     </span>
                   )}
 
                   {product.size_preset && (
-                    <span className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-[10px] font-medium text-white/80">
+                    <span
+                      className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-medium border"
+                      style={{
+                        background: isLight
+                          ? "#f3f4f6"
+                          : "rgba(255,255,255,0.06)",
+                        color: isLight
+                          ? "#374151"
+                          : "rgba(255,255,255,0.80)",
+                        borderColor: isLight
+                          ? "#d1d5db"
+                          : "rgba(255,255,255,0.15)",
+                      }}
+                    >
                       {product.size_preset}
                     </span>
                   )}
                 </div>
 
-                <div className="text-2xl font-display font-semibold text-[#ebd281] mt-3">
+                <div
+                  className="text-2xl font-display font-semibold mt-3"
+                  style={{
+                    color: isLight
+                      ? "#9a7200"
+                      : "#ebd281",
+                  }}
+                >
                   ₹
                   {Number(
                     product.price || 0
@@ -810,8 +990,13 @@ function ScannedProductModal({
 
             {/* CHOICE */}
             <div className="mt-6">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-white/50 mb-3">
-                What do you want to do?
+              <div
+                className="text-[10px] uppercase tracking-[0.22em] mb-3"
+                style={{
+                  color: mutedText,
+                }}
+              >
+                What Do You Want To Do?
               </div>
 
               <div className="grid gap-2.5">
@@ -820,7 +1005,15 @@ function ScannedProductModal({
                   type="button"
                   onClick={onBooking}
                   data-testid="scanned-product-booking"
-                  className="w-full rounded-xl bg-white text-[#11151d] px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 hover:bg-white/90 active:scale-[0.99] transition"
+                  className="w-full rounded-xl px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 transition active:scale-[0.99]"
+                  style={{
+                    background: isLight
+                      ? "#111827"
+                      : "#ffffff",
+                    color: isLight
+                      ? "#ffffff"
+                      : "#11151d",
+                  }}
                 >
                   <ClipboardList className="w-4 h-4" />
                   Booking
@@ -831,7 +1024,12 @@ function ScannedProductModal({
                   type="button"
                   onClick={onDispatch}
                   data-testid="scanned-product-dispatch"
-                  className="w-full rounded-xl bg-gradient-to-br from-[#d4af37] to-[#ebd281] text-black px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition"
+                  className="w-full rounded-xl px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 transition active:scale-[0.99]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#d4af37,#ebd281)",
+                    color: "#111111",
+                  }}
                 >
                   <Truck className="w-4 h-4" />
                   Dispatch
@@ -842,7 +1040,15 @@ function ScannedProductModal({
                   type="button"
                   onClick={onEstimate}
                   data-testid="scanned-product-estimate"
-                  className="w-full rounded-xl bg-white text-[#11151d] px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 hover:bg-white/90 active:scale-[0.99] transition"
+                  className="w-full rounded-xl px-4 py-3.5 text-xs uppercase tracking-[0.18em] font-semibold inline-flex items-center justify-center gap-2 transition active:scale-[0.99]"
+                  style={{
+                    background: isLight
+                      ? "#111827"
+                      : "#ffffff",
+                    color: isLight
+                      ? "#ffffff"
+                      : "#11151d",
+                  }}
                 >
                   <FileText className="w-4 h-4" />
                   Estimate
@@ -850,9 +1056,16 @@ function ScannedProductModal({
               </div>
             </div>
 
-            <div className="text-[10px] text-white/35 text-center mt-4">
-              Product fetched using the scanned SR
-              number.
+            <div
+              className="text-[10px] text-center mt-4"
+              style={{
+                color: isLight
+                  ? "#6b7280"
+                  : "rgba(255,255,255,0.38)",
+              }}
+            >
+              Product fetched using the
+              scanned SR number.
             </div>
           </div>
         )}
@@ -860,6 +1073,10 @@ function ScannedProductModal({
     </div>
   );
 }
+
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function getOverline(role) {
   if (role === "admin")
