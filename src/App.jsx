@@ -1,12 +1,6 @@
 import "@/App.css";
 import { useEffect, useState } from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -48,30 +42,16 @@ function Shell({ children }) {
   );
 }
 
-/* -------------------------------------------------------
-   SC AURA APP OPENING SPLASH
-------------------------------------------------------- */
+/* =========================================================
+   SC AURA SPLASH
+   Shows ONLY once when the SPA initially loads.
+========================================================= */
 
 function LaunchSplash() {
   const [visible, setVisible] = useState(true);
   const [leaving, setLeaving] = useState(false);
-  const location = useLocation();
 
   useEffect(() => {
-    // Don't show the splash on public pages or login.
-    const publicPage =
-      location.pathname === "/login" ||
-      location.pathname.startsWith("/catalogue/") ||
-      location.pathname.startsWith("/r/");
-
-    if (publicPage) {
-      setVisible(false);
-      return;
-    }
-
-    setVisible(true);
-    setLeaving(false);
-
     const exitTimer = setTimeout(() => {
       setLeaving(true);
     }, 650);
@@ -84,7 +64,7 @@ function LaunchSplash() {
       clearTimeout(exitTimer);
       clearTimeout(hideTimer);
     };
-  }, [location.pathname]);
+  }, []);
 
   if (!visible) return null;
 
@@ -100,7 +80,8 @@ function LaunchSplash() {
       <div
         className="flex flex-col items-center justify-center"
         style={{
-          animation: "scauraLogoEnter 0.75s cubic-bezier(.2,.8,.2,1) forwards",
+          animation:
+            "scauraLogoEnter 0.75s cubic-bezier(.2,.8,.2,1) forwards",
         }}
       >
         <div
@@ -121,7 +102,7 @@ function LaunchSplash() {
           />
 
           <img
-            src="https://app.scaurakurtis.com/icons/icon-512.png"
+            src="https://app.scaurakurtis.com/icons/icon-512.png?v=2"
             alt="SC Aura Kurtis"
             className="relative w-36 h-36 sm:w-40 sm:h-40 object-contain"
             draggable="false"
@@ -147,9 +128,9 @@ function LaunchSplash() {
   );
 }
 
-/* -------------------------------------------------------
-   SPLASH ANIMATION STYLES
-------------------------------------------------------- */
+/* =========================================================
+   SPLASH ANIMATION
+========================================================= */
 
 function SplashStyles() {
   return (
@@ -220,8 +201,7 @@ function SplashStyles() {
       }
 
       .scaura-splash-leaving {
-        animation:
-          scauraSplashLeave 0.35s ease-in forwards !important;
+        animation: scauraSplashLeave 0.35s ease-in forwards !important;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -233,9 +213,9 @@ function SplashStyles() {
   );
 }
 
-/* -------------------------------------------------------
+/* =========================================================
    TOASTER
-------------------------------------------------------- */
+========================================================= */
 
 function ThemedToaster() {
   const { theme } = useTheme();
@@ -263,9 +243,9 @@ function ThemedToaster() {
   );
 }
 
-/* -------------------------------------------------------
+/* =========================================================
    APP
-------------------------------------------------------- */
+========================================================= */
 
 function App() {
   return (
@@ -279,6 +259,7 @@ function App() {
               <ThemedToaster />
 
               <Routes>
+                {/* Login */}
                 <Route path="/login" element={<Login />} />
 
                 {/* Public routes */}
@@ -297,6 +278,7 @@ function App() {
                   element={<PublicReceipt kind="dispatch" />}
                 />
 
+                {/* Dashboard */}
                 <Route
                   path="/"
                   element={
@@ -501,6 +483,7 @@ function App() {
                   }
                 />
 
+                {/* History */}
                 <Route
                   path="/history"
                   element={
@@ -512,6 +495,7 @@ function App() {
                   }
                 />
 
+                {/* Users */}
                 <Route
                   path="/users"
                   element={
@@ -523,6 +507,7 @@ function App() {
                   }
                 />
 
+                {/* Profile */}
                 <Route
                   path="/profile"
                   element={
@@ -532,6 +517,7 @@ function App() {
                   }
                 />
 
+                {/* Settings */}
                 <Route
                   path="/settings"
                   element={
@@ -543,6 +529,7 @@ function App() {
                   }
                 />
 
+                {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </BrowserRouter>
