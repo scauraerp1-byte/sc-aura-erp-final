@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE, formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
-import { Loader2, Image as ImageIcon, X } from "lucide-react";
+import { Loader2, Image as ImageIcon, X, Minus, Plus } from "lucide-react";
 
 const CATEGORIES = ["1 PC", "2 PC", "3 PC"];
 
@@ -20,10 +20,16 @@ export default function ProductForm() {
     notes: "",
     factory_name: "",
     images: [],
+    stock_by_size: {},
   });
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const [distributionOpen, setDistributionOpen] = useState(false);
+  const [baseQuantity, setBaseQuantity] = useState(0);
+  const [extraQuantity, setExtraQuantity] = useState(0);
+  const [extraDistribution, setExtraDistribution] = useState({});
 
   const update = (k, v) =>
     setForm((f) => ({
@@ -69,16 +75,201 @@ export default function ProductForm() {
     }
   };
 
+  /*
+   * Calculate size distribution whenever quantity or size preset changes.
+   *
+   * Example:
+   * 60 / 4 sizes = 15 each → no popup
+   * 63 / 4 sizes = 15 each + 3 extra → popup
+   */
+  useEffect(() => {
+    const quantity = Number(form.quantity) || 0;
+    const sizes = PRESETS[form.size_preset] || [];
+
+    if (!sizes.length) {
+      setForm((f) => ({
+        ...f,
+        stock_by_size: {},
+      }));
+      setDistributionOpen(false);
+      return;
+    }
+
+    const base = Math.floor(quantity / sizes.length);
+    const remainder = quantity % sizes.length;
+
+    setBaseQuantity(base);
+    setExtraQuantity(remainder);
+
+    if (remainder === 0) {
+      const equalDistribution = {};
+
+      sizes.forEach((size) => {
+        equalDistribution[size] = base;
+      });
+
+      setForm((f) => ({
+        ...f,
+        stock_by_size: equalDistribution,
+      }));
+
+      setExtraDistribution({});
+      setDistributionOpen(false);
+      return;
+    }
+
+    /*
+     * Don't automatically assign the remainder.
+     * Ask the user where the extra pieces belong.
+     */
+    const existingExtras = {};
+
+    sizes.forEach((size) => {
+      existingExtras[size] = 0;
+    });
+
+    setExtraDistribution(existingExtras);
+    setDistributionOpen(true);
+
+    const equalBase = {};
+
+    sizes.forEach((size) => {
+      equalBase[size] = base;
+    });
+
+    setForm((f) => ({
+      ...f,
+      stock_by_size: equalBase,
+    }));
+  }, [form.quantity, form.size_preset]);
+
+  const updateExtra = (size, value) => {
+    const numericValue = Math.max(
+      0,
+      Number.isFinite(Number(value)) ? Number(value) : 0
+    );
+
+    setExtraDistribution((current) => ({
+      ...current,
+      [size]: numericValue,
+    }));
+  };
+
+  const increaseExtra = (size) => {
+    const currentTotal = Object.values(extraDistribution).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0
+    );
+
+    if (currentTotal >= extraQuantity) return;
+
+    updateExtra(
+      size,
+      Number(extraDistribution[size] || 0) + 1
+    );
+  };
+
+  const decreaseExtra = (size) => {
+    updateExtra(
+      size,
+      Math.max(
+        0,
+        Number(extraDistribution[size] || 0) - 1
+      )
+    );
+  };
+
+  const extraDistributed = Object.values(extraDistribution).reduce(
+    (sum, value) => sum + Number(value || 0),
+    0
+  );
+
+  const remainingExtra = extraQuantity - extraDistributed;
+
+  const confirmDistribution = () => {
+    if (remainingExtra !== 0) return;
+
+    const sizes = PRESETS[form.size_preset] || [];
+
+    const finalStock = {};
+
+    sizes.forEach((size) => {
+      finalStock[size] =
+        baseQuantity +
+        Number(extraDistribution[size] || 0);
+    });
+
+    const finalTotal = Object.values(finalStock).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0
+    );
+
+    if (finalTotal !== Number(form.quantity)) {
+      setError(
+        "Size-wise quantities must exactly match total quantity."
+      );
+      return;
+    }
+
+    setForm((f) => ({
+      ...f,
+      stock_by_size: finalStock,
+    }));
+
+    setDistributionOpen(false);
+    setError("");
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const quantity = Number(form.quantity) || 0;
+    const sizes = PRESETS[form.size_preset] || [];
+
+    /*
+     * Don't allow save while extra pieces are still waiting
+     * to be distributed.
+     */
+    if (extraQuantity > 0 && distributionOpen) {
+      setError(
+        `Please distribute all ${extraQuantity} extra piece${
+          extraQuantity === 1 ? "" : "s"
+        } before saving.`
+      );
+      return;
+    }
+
+    const stockTotal = Object.values(form.stock_by_size || {}).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0
+    );
+
+    if (stockTotal !== quantity) {
+      setError(
+        "Size-wise quantities must exactly match total quantity."
+      );
+      return;
+    }
+
+    if (
+      sizes.some(
+        (size) =>
+          form.stock_by_size?.[size] === undefined
+      )
+    ) {
+      setError("Please complete the size-wise quantity distribution.");
+      return;
+    }
+
     setBusy(true);
 
     try {
       const payload = {
         ...form,
-        quantity: Number(form.quantity),
+        quantity,
         price: Number(form.price),
+        stock_by_size: form.stock_by_size,
       };
 
       const { data } = await api.post("/products", payload);
@@ -86,14 +277,15 @@ export default function ProductForm() {
       navigate(`/products/${data.id}`);
     } catch (err) {
       setError(
-        formatApiError(err.response?.data?.detail) || err.message
+        formatApiError(err.response?.data?.detail) ||
+          err.message
       );
     } finally {
       setBusy(false);
     }
   };
 
-  const sizes = PRESETS[form.size_preset];
+  const sizes = PRESETS[form.size_preset] || [];
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -111,7 +303,9 @@ export default function ProductForm() {
                 data-testid="product-title"
                 required
                 value={form.title}
-                onChange={(e) => update("title", e.target.value)}
+                onChange={(e) =>
+                  update("title", e.target.value)
+                }
                 className="aura-input"
                 placeholder="e.g. Royal Bandhani 3PC Set"
               />
@@ -126,7 +320,9 @@ export default function ProductForm() {
                 data-testid="product-description"
                 rows={2}
                 value={form.description}
-                onChange={(e) => update("description", e.target.value)}
+                onChange={(e) =>
+                  update("description", e.target.value)
+                }
                 className="aura-input"
                 placeholder="Short product description…"
               />
@@ -143,7 +339,9 @@ export default function ProductForm() {
                     type="button"
                     key={c}
                     data-testid={`cat-${c}`}
-                    onClick={() => update("category", c)}
+                    onClick={() =>
+                      update("category", c)
+                    }
                     className={`flex-1 min-h-[44px] px-4 py-2.5 rounded-full text-xs uppercase tracking-[0.2em] border transition-colors ${
                       form.category === c
                         ? "bg-[var(--sca-primary)] text-white border-[var(--sca-primary)]"
@@ -168,7 +366,9 @@ export default function ProductForm() {
                 min={0}
                 step="0.01"
                 value={form.price}
-                onChange={(e) => update("price", e.target.value)}
+                onChange={(e) =>
+                  update("price", e.target.value)
+                }
                 className="aura-input"
               />
             </label>
@@ -184,7 +384,9 @@ export default function ProductForm() {
                 type="number"
                 min={0}
                 value={form.quantity}
-                onChange={(e) => update("quantity", e.target.value)}
+                onChange={(e) =>
+                  update("quantity", e.target.value)
+                }
                 className="aura-input"
               />
             </label>
@@ -214,7 +416,9 @@ export default function ProductForm() {
 
           <SizePresetSelector
             value={form.size_preset}
-            onChange={(v) => update("size_preset", v)}
+            onChange={(v) =>
+              update("size_preset", v)
+            }
           />
 
           <div className="mt-3 text-xs text-white/50">
@@ -223,6 +427,32 @@ export default function ProductForm() {
               {sizes.join(" · ")}
             </span>
           </div>
+
+          {/* Current size stock preview */}
+          {sizes.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">
+                Size-wise quantity
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {sizes.map((size) => (
+                  <div
+                    key={size}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5"
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-white/40">
+                      {size}
+                    </div>
+
+                    <div className="text-lg font-semibold text-white mt-0.5">
+                      {form.stock_by_size?.[size] ?? 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </GlassCard>
 
         <GlassCard>
@@ -247,7 +477,9 @@ export default function ProductForm() {
               accept="image/*"
               multiple
               className="hidden"
-              onChange={(e) => onPickImages(e.target.files)}
+              onChange={(e) =>
+                onPickImages(e.target.files)
+              }
             />
           </label>
 
@@ -266,7 +498,9 @@ export default function ProductForm() {
 
                   <button
                     type="button"
-                    onClick={() => removeImage(i)}
+                    onClick={() =>
+                      removeImage(i)
+                    }
                     className="absolute top-1 right-1 w-6 h-6 grid place-items-center rounded-full bg-black/70 text-white/80 hover:text-white"
                   >
                     <X className="w-3 h-3" />
@@ -287,7 +521,9 @@ export default function ProductForm() {
               data-testid="product-notes"
               rows={2}
               value={form.notes}
-              onChange={(e) => update("notes", e.target.value)}
+              onChange={(e) =>
+                update("notes", e.target.value)
+              }
               className="aura-input"
               placeholder="Optional notes for inventory team…"
             />
@@ -311,14 +547,146 @@ export default function ProductForm() {
 
           <button
             data-testid="product-submit"
-            disabled={busy}
+            disabled={
+              busy ||
+              (extraQuantity > 0 &&
+                distributionOpen)
+            }
             className="btn-primary rounded-full px-8 py-3 text-xs uppercase tracking-[0.25em] inline-flex items-center gap-2"
           >
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busy && (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            )}
+
             Save Product
           </button>
         </div>
       </form>
+
+      {/* Extra quantity distribution modal */}
+      {distributionOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#11151d] shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-white/10">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/40">
+                Size Distribution
+              </div>
+
+              <h2 className="text-xl font-semibold text-white mt-2">
+                Distribute {extraQuantity} Extra{" "}
+                {extraQuantity === 1
+                  ? "Piece"
+                  : "Pieces"}
+              </h2>
+
+              <p className="text-sm text-white/50 mt-2">
+                Equal quantity is{" "}
+                <span className="text-white/80">
+                  {baseQuantity}
+                </span>{" "}
+                per size. Select where the extra pieces
+                belong.
+              </p>
+            </div>
+
+            <div className="p-6 space-y-3">
+              {sizes.map((size) => (
+                <div
+                  key={size}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                >
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      {size}
+                    </div>
+
+                    <div className="text-[10px] text-white/40 mt-0.5">
+                      Base: {baseQuantity}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        decreaseExtra(size)
+                      }
+                      disabled={
+                        Number(
+                          extraDistribution[size] || 0
+                        ) <= 0
+                      }
+                      className="w-9 h-9 rounded-full border border-white/10 bg-white/5 grid place-items-center text-white/70 hover:bg-white/10 disabled:opacity-30"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+
+                    <div className="w-10 text-center text-white font-semibold">
+                      {extraDistribution[size] || 0}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        increaseExtra(size)
+                      }
+                      disabled={remainingExtra <= 0}
+                      className="w-9 h-9 rounded-full border border-white/10 bg-white/5 grid place-items-center text-white/70 hover:bg-white/10 disabled:opacity-30"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div
+                className={`mt-4 rounded-2xl px-4 py-3 border ${
+                  remainingExtra === 0
+                    ? "bg-emerald-500/10 border-emerald-500/30"
+                    : "bg-amber-500/10 border-amber-500/30"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-white/60">
+                    Remaining
+                  </span>
+
+                  <span
+                    className={`font-semibold ${
+                      remainingExtra === 0
+                        ? "text-emerald-300"
+                        : "text-amber-300"
+                    }`}
+                  >
+                    {remainingExtra}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 pt-0 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setDistributionOpen(false)
+                }
+                className="rounded-full glass px-5 py-3 text-xs uppercase tracking-[0.2em] hover:bg-white/10"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={remainingExtra !== 0}
+                onClick={confirmDistribution}
+                className="btn-primary rounded-full px-6 py-3 text-xs uppercase tracking-[0.2em] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Confirm Distribution
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
