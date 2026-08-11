@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE, formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
@@ -31,17 +31,19 @@ export default function ProductForm() {
   const [extraQuantity, setExtraQuantity] = useState(0);
   const [extraDistribution, setExtraDistribution] = useState({});
 
-  const update = (k, v) =>
+  const update = (k, v) => {
     setForm((f) => ({
       ...f,
       [k]: v,
     }));
+  };
 
-  const removeImage = (idx) =>
+  const removeImage = (idx) => {
     setForm((f) => ({
       ...f,
       images: f.images.filter((_, i) => i !== idx),
     }));
+  };
 
   const onPickImages = async (files) => {
     const uploaded = [];
@@ -76,22 +78,29 @@ export default function ProductForm() {
   };
 
   /*
-   * Calculate size distribution whenever quantity or size preset changes.
+   * Calculate the size distribution only when the user
+   * finishes entering quantity and leaves the field.
    *
    * Example:
-   * 60 / 4 sizes = 15 each → no popup
-   * 63 / 4 sizes = 15 each + 3 extra → popup
+   * 60 / 4 = 15 each -> no popup
+   * 62 / 4 = 15 each + 2 extra -> popup
+   * 63 / 4 = 15 each + 3 extra -> popup
    */
-  useEffect(() => {
-    const quantity = Number(form.quantity) || 0;
+  const calculateDistribution = (quantityValue) => {
+    const quantity = Number(quantityValue) || 0;
     const sizes = PRESETS[form.size_preset] || [];
 
     if (!sizes.length) {
+      setBaseQuantity(0);
+      setExtraQuantity(0);
+      setExtraDistribution({});
+      setDistributionOpen(false);
+
       setForm((f) => ({
         ...f,
         stock_by_size: {},
       }));
-      setDistributionOpen(false);
+
       return;
     }
 
@@ -101,47 +110,113 @@ export default function ProductForm() {
     setBaseQuantity(base);
     setExtraQuantity(remainder);
 
-    if (remainder === 0) {
-      const equalDistribution = {};
+    const baseStock = {};
 
-      sizes.forEach((size) => {
-        equalDistribution[size] = base;
-      });
+    sizes.forEach((size) => {
+      baseStock[size] = base;
+    });
+
+    /*
+     * Perfectly divisible quantity:
+     * No popup required.
+     */
+    if (remainder === 0) {
+      setExtraDistribution({});
+      setDistributionOpen(false);
 
       setForm((f) => ({
         ...f,
-        stock_by_size: equalDistribution,
+        stock_by_size: baseStock,
       }));
 
-      setExtraDistribution({});
-      setDistributionOpen(false);
       return;
     }
 
     /*
-     * Don't automatically assign the remainder.
-     * Ask the user where the extra pieces belong.
+     * Remainder exists:
+     * Start all extra quantities from zero and ask
+     * the user where the extras belong.
      */
-    const existingExtras = {};
+    const extras = {};
 
     sizes.forEach((size) => {
-      existingExtras[size] = 0;
+      extras[size] = 0;
     });
 
-    setExtraDistribution(existingExtras);
-    setDistributionOpen(true);
-
-    const equalBase = {};
-
-    sizes.forEach((size) => {
-      equalBase[size] = base;
-    });
+    setExtraDistribution(extras);
 
     setForm((f) => ({
       ...f,
-      stock_by_size: equalBase,
+      stock_by_size: baseStock,
     }));
-  }, [form.quantity, form.size_preset]);
+
+    setDistributionOpen(true);
+  };
+
+  const handleQuantityBlur = (e) => {
+    calculateDistribution(e.target.value);
+  };
+
+  const handleSizePresetChange = (value) => {
+    update("size_preset", value);
+
+    const quantity = Number(form.quantity) || 0;
+    const sizes = PRESETS[value] || [];
+
+    if (!sizes.length) {
+      setBaseQuantity(0);
+      setExtraQuantity(0);
+      setExtraDistribution({});
+      setDistributionOpen(false);
+
+      setForm((f) => ({
+        ...f,
+        size_preset: value,
+        stock_by_size: {},
+      }));
+
+      return;
+    }
+
+    const base = Math.floor(quantity / sizes.length);
+    const remainder = quantity % sizes.length;
+
+    const baseStock = {};
+
+    sizes.forEach((size) => {
+      baseStock[size] = base;
+    });
+
+    setBaseQuantity(base);
+    setExtraQuantity(remainder);
+
+    if (remainder === 0) {
+      setExtraDistribution({});
+      setDistributionOpen(false);
+
+      setForm((f) => ({
+        ...f,
+        size_preset: value,
+        stock_by_size: baseStock,
+      }));
+    } else {
+      const extras = {};
+
+      sizes.forEach((size) => {
+        extras[size] = 0;
+      });
+
+      setExtraDistribution(extras);
+
+      setForm((f) => ({
+        ...f,
+        size_preset: value,
+        stock_by_size: baseStock,
+      }));
+
+      setDistributionOpen(true);
+    }
+  };
 
   const updateExtra = (size, value) => {
     const numericValue = Math.max(
@@ -149,9 +224,22 @@ export default function ProductForm() {
       Number.isFinite(Number(value)) ? Number(value) : 0
     );
 
+    const currentTotal = Object.entries(extraDistribution).reduce(
+      (sum, [key, currentValue]) => {
+        if (key === size) return sum;
+        return sum + Number(currentValue || 0);
+      },
+      0
+    );
+
+    const maxAllowed = Math.max(
+      0,
+      extraQuantity - currentTotal
+    );
+
     setExtraDistribution((current) => ({
       ...current,
-      [size]: numericValue,
+      [size]: Math.min(numericValue, maxAllowed),
     }));
   };
 
@@ -163,20 +251,20 @@ export default function ProductForm() {
 
     if (currentTotal >= extraQuantity) return;
 
-    updateExtra(
-      size,
-      Number(extraDistribution[size] || 0) + 1
-    );
+    setExtraDistribution((current) => ({
+      ...current,
+      [size]: Number(current[size] || 0) + 1,
+    }));
   };
 
   const decreaseExtra = (size) => {
-    updateExtra(
-      size,
-      Math.max(
+    setExtraDistribution((current) => ({
+      ...current,
+      [size]: Math.max(
         0,
-        Number(extraDistribution[size] || 0) - 1
-      )
-    );
+        Number(current[size] || 0) - 1
+      ),
+    }));
   };
 
   const extraDistributed = Object.values(extraDistribution).reduce(
@@ -190,7 +278,6 @@ export default function ProductForm() {
     if (remainingExtra !== 0) return;
 
     const sizes = PRESETS[form.size_preset] || [];
-
     const finalStock = {};
 
     sizes.forEach((size) => {
@@ -228,8 +315,8 @@ export default function ProductForm() {
     const sizes = PRESETS[form.size_preset] || [];
 
     /*
-     * Don't allow save while extra pieces are still waiting
-     * to be distributed.
+     * Don't allow saving while extra pieces are still
+     * waiting to be distributed.
      */
     if (extraQuantity > 0 && distributionOpen) {
       setError(
@@ -240,7 +327,9 @@ export default function ProductForm() {
       return;
     }
 
-    const stockTotal = Object.values(form.stock_by_size || {}).reduce(
+    const stockTotal = Object.values(
+      form.stock_by_size || {}
+    ).reduce(
       (sum, value) => sum + Number(value || 0),
       0
     );
@@ -258,7 +347,9 @@ export default function ProductForm() {
           form.stock_by_size?.[size] === undefined
       )
     ) {
-      setError("Please complete the size-wise quantity distribution.");
+      setError(
+        "Please complete the size-wise quantity distribution."
+      );
       return;
     }
 
@@ -272,7 +363,10 @@ export default function ProductForm() {
         stock_by_size: form.stock_by_size,
       };
 
-      const { data } = await api.post("/products", payload);
+      const { data } = await api.post(
+        "/products",
+        payload
+      );
 
       navigate(`/products/${data.id}`);
     } catch (err) {
@@ -289,7 +383,10 @@ export default function ProductForm() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <SectionTitle overline="Inventory" title="Add Product" />
+      <SectionTitle
+        overline="Inventory"
+        title="Add Product"
+      />
 
       <form onSubmit={submit} className="space-y-4">
         <GlassCard>
@@ -321,7 +418,10 @@ export default function ProductForm() {
                 rows={2}
                 value={form.description}
                 onChange={(e) =>
-                  update("description", e.target.value)
+                  update(
+                    "description",
+                    e.target.value
+                  )
                 }
                 className="aura-input"
                 placeholder="Short product description…"
@@ -385,8 +485,12 @@ export default function ProductForm() {
                 min={0}
                 value={form.quantity}
                 onChange={(e) =>
-                  update("quantity", e.target.value)
+                  update(
+                    "quantity",
+                    e.target.value
+                  )
                 }
+                onBlur={handleQuantityBlur}
                 className="aura-input"
               />
             </label>
@@ -400,7 +504,10 @@ export default function ProductForm() {
                 data-testid="product-factory"
                 value={form.factory_name}
                 onChange={(e) =>
-                  update("factory_name", e.target.value)
+                  update(
+                    "factory_name",
+                    e.target.value
+                  )
                 }
                 className="aura-input"
                 placeholder="Surat Mills"
@@ -416,9 +523,7 @@ export default function ProductForm() {
 
           <SizePresetSelector
             value={form.size_preset}
-            onChange={(v) =>
-              update("size_preset", v)
-            }
+            onChange={handleSizePresetChange}
           />
 
           <div className="mt-3 text-xs text-white/50">
@@ -428,7 +533,6 @@ export default function ProductForm() {
             </span>
           </div>
 
-          {/* Current size stock preview */}
           {sizes.length > 0 && (
             <div className="mt-4">
               <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">
@@ -446,7 +550,8 @@ export default function ProductForm() {
                     </div>
 
                     <div className="text-lg font-semibold text-white mt-0.5">
-                      {form.stock_by_size?.[size] ?? 0}
+                      {form.stock_by_size?.[size] ??
+                        0}
                     </div>
                   </div>
                 ))}
@@ -613,7 +718,8 @@ export default function ProductForm() {
                       }
                       disabled={
                         Number(
-                          extraDistribution[size] || 0
+                          extraDistribution[size] ||
+                            0
                         ) <= 0
                       }
                       className="w-9 h-9 rounded-full border border-white/10 bg-white/5 grid place-items-center text-white/70 hover:bg-white/10 disabled:opacity-30"
@@ -622,7 +728,8 @@ export default function ProductForm() {
                     </button>
 
                     <div className="w-10 text-center text-white font-semibold">
-                      {extraDistribution[size] || 0}
+                      {extraDistribution[size] ||
+                        0}
                     </div>
 
                     <button
