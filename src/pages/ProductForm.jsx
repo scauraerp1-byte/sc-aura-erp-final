@@ -56,6 +56,10 @@ export default function ProductForm() {
     }));
   };
 
+  // ---------------------------------------------------------
+  // IMAGE UPLOAD
+  // ---------------------------------------------------------
+
   const onPickImages = async (files) => {
     const fileList = Array.from(files || []);
 
@@ -67,50 +71,123 @@ export default function ProductForm() {
     const uploaded = [];
 
     try {
-      for (const file of fileList) {
+      for (const originalFile of fileList) {
+        let file = originalFile;
+
+        /*
+         * Camera/browser files can sometimes arrive with:
+         * - empty filename
+         * - no extension
+         * - generic filename
+         *
+         * Backend checks the extension, so give such files
+         * a valid extension based on MIME type.
+         */
+        const mime = file.type || "";
+
+        if (
+          !file.name ||
+          !/\.(jpg|jpeg|png|webp|gif|bmp|tif|tiff|heic|heif|avif)$/i.test(
+            file.name
+          )
+        ) {
+          let extension = ".jpg";
+
+          if (mime === "image/png") {
+            extension = ".png";
+          } else if (mime === "image/webp") {
+            extension = ".webp";
+          } else if (mime === "image/gif") {
+            extension = ".gif";
+          } else if (mime === "image/heic") {
+            extension = ".heic";
+          } else if (mime === "image/heif") {
+            extension = ".heif";
+          } else if (mime === "image/avif") {
+            extension = ".avif";
+          }
+
+          file = new File(
+            [file],
+            `product-image-${Date.now()}${extension}`,
+            {
+              type: mime || "image/jpeg",
+            }
+          );
+        }
+
         const body = new FormData();
 
-        body.append(
-          "file",
-          file,
-          file.name || "product-image"
-        );
+        body.append("file", file);
 
-        const { data } = await api.post(
-          "/uploads",
-          body
-        );
+        /*
+         * IMPORTANT:
+         * Do NOT manually set Content-Type here.
+         * Axios/browser automatically adds multipart boundary.
+         */
+        const response = await api.post("/uploads", body);
 
-        if (!data?.url) {
+        const data = response?.data;
+
+        if (!data || typeof data !== "object") {
           throw new Error(
-            "Image upload failed. Server did not return an image URL."
+            "Invalid response received from image server."
+          );
+        }
+
+        if (!data.url || typeof data.url !== "string") {
+          throw new Error(
+            "Image uploaded but server did not return an image URL."
           );
         }
 
         /*
          * Backend returns:
-         * /api/uploads/filename.webp
          *
-         * Convert it into the actual current ERP URL.
+         * /api/uploads/xxxxx.webp
+         *
+         * api.defaults.baseURL is something like:
+         *
+         * https://your-backend-domain.com/api
+         *
+         * Using new URL() with the backend base ensures the
+         * preview points to the backend, even if frontend and
+         * backend are on different origins.
          */
-        const imageUrl = data.url.startsWith("http")
-          ? data.url
-          : `${window.location.origin}${data.url}`;
+        let imageUrl;
+
+        try {
+          imageUrl = new URL(
+            data.url,
+            api.defaults.baseURL
+          ).toString();
+        } catch {
+          imageUrl = data.url;
+        }
 
         uploaded.push(imageUrl);
       }
 
-      setForm((f) => ({
-        ...f,
-        images: [...f.images, ...uploaded],
-      }));
+      /*
+       * Only update React state after all selected images
+       * have uploaded successfully.
+       */
+      if (uploaded.length > 0) {
+        setForm((f) => ({
+          ...f,
+          images: [...f.images, ...uploaded],
+        }));
+      }
     } catch (err) {
       console.error("IMAGE UPLOAD ERROR:", err);
 
+      const detail =
+        err?.response?.data?.detail ??
+        err?.response?.data?.message ??
+        err?.message;
+
       setError(
-        formatApiError(err.response?.data?.detail) ||
-          err.response?.data?.message ||
-          err.message ||
+        formatApiError(detail) ||
           "Something went wrong while uploading image."
       );
     } finally {
@@ -125,6 +202,10 @@ export default function ProductForm() {
       }
     }
   };
+
+  // ---------------------------------------------------------
+  // SIZE DISTRIBUTION
+  // ---------------------------------------------------------
 
   const calculateDistribution = (quantityValue) => {
     const quantity = Number(quantityValue) || 0;
@@ -320,6 +401,10 @@ export default function ProductForm() {
     setError("");
   };
 
+  // ---------------------------------------------------------
+  // SUBMIT
+  // ---------------------------------------------------------
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -397,6 +482,10 @@ export default function ProductForm() {
   };
 
   const sizes = PRESETS[form.size_preset] || [];
+
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -666,12 +755,6 @@ export default function ProductForm() {
                     className="w-full h-full object-cover"
                     loading="lazy"
                     decoding="async"
-                    onError={() => {
-                      console.error(
-                        "IMAGE PREVIEW FAILED:",
-                        src
-                      );
-                    }}
                   />
 
                   <button
