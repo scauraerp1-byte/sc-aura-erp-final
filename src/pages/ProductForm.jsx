@@ -1,14 +1,24 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE, formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
-import { Loader2, Image as ImageIcon, X, Minus, Plus } from "lucide-react";
+import {
+  Loader2,
+  Image as ImageIcon,
+  Camera,
+  X,
+  Minus,
+  Plus,
+} from "lucide-react";
 
 const CATEGORIES = ["1 PC", "2 PC", "3 PC"];
 
 export default function ProductForm() {
   const navigate = useNavigate();
+
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -24,6 +34,7 @@ export default function ProductForm() {
   });
 
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   const [distributionOpen, setDistributionOpen] = useState(false);
@@ -45,13 +56,23 @@ export default function ProductForm() {
     }));
   };
 
+  /*
+   * Upload selected/captured images.
+   * Gallery can send multiple files.
+   * Camera normally sends one file.
+   */
   const onPickImages = async (files) => {
+    const fileList = Array.from(files || []);
+
+    if (!fileList.length) return;
+
+    setUploading(true);
+    setError("");
+
     const uploaded = [];
 
     try {
-      setError("");
-
-      for (const file of Array.from(files || [])) {
+      for (const file of fileList) {
         const body = new FormData();
         body.append("file", file);
 
@@ -61,7 +82,9 @@ export default function ProductForm() {
           },
         });
 
-        uploaded.push(`${API_BASE}${data.url.replace("/api", "")}`);
+        uploaded.push(
+          `${API_BASE}${data.url.replace("/api", "")}`
+        );
       }
 
       setForm((f) => ({
@@ -74,17 +97,26 @@ export default function ProductForm() {
           err.message ||
           "Unable to upload image."
       );
+    } finally {
+      setUploading(false);
+
+      /*
+       * Reset both inputs so the user can select/capture
+       * the same image again if required.
+       */
+      if (galleryInputRef.current) {
+        galleryInputRef.current.value = "";
+      }
+
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = "";
+      }
     }
   };
 
   /*
    * Calculate the size distribution only when the user
    * finishes entering quantity and leaves the field.
-   *
-   * Example:
-   * 60 / 4 = 15 each -> no popup
-   * 62 / 4 = 15 each + 2 extra -> popup
-   * 63 / 4 = 15 each + 3 extra -> popup
    */
   const calculateDistribution = (quantityValue) => {
     const quantity = Number(quantityValue) || 0;
@@ -116,10 +148,6 @@ export default function ProductForm() {
       baseStock[size] = base;
     });
 
-    /*
-     * Perfectly divisible quantity:
-     * No popup required.
-     */
     if (remainder === 0) {
       setExtraDistribution({});
       setDistributionOpen(false);
@@ -132,11 +160,6 @@ export default function ProductForm() {
       return;
     }
 
-    /*
-     * Remainder exists:
-     * Start all extra quantities from zero and ask
-     * the user where the extras belong.
-     */
     const extras = {};
 
     sizes.forEach((size) => {
@@ -158,10 +181,10 @@ export default function ProductForm() {
   };
 
   const handleSizePresetChange = (value) => {
-    update("size_preset", value);
-
     const quantity = Number(form.quantity) || 0;
     const sizes = PRESETS[value] || [];
+
+    update("size_preset", value);
 
     if (!sizes.length) {
       setBaseQuantity(0);
@@ -218,33 +241,10 @@ export default function ProductForm() {
     }
   };
 
-  const updateExtra = (size, value) => {
-    const numericValue = Math.max(
-      0,
-      Number.isFinite(Number(value)) ? Number(value) : 0
-    );
-
-    const currentTotal = Object.entries(extraDistribution).reduce(
-      (sum, [key, currentValue]) => {
-        if (key === size) return sum;
-        return sum + Number(currentValue || 0);
-      },
-      0
-    );
-
-    const maxAllowed = Math.max(
-      0,
-      extraQuantity - currentTotal
-    );
-
-    setExtraDistribution((current) => ({
-      ...current,
-      [size]: Math.min(numericValue, maxAllowed),
-    }));
-  };
-
   const increaseExtra = (size) => {
-    const currentTotal = Object.values(extraDistribution).reduce(
+    const currentTotal = Object.values(
+      extraDistribution
+    ).reduce(
       (sum, value) => sum + Number(value || 0),
       0
     );
@@ -267,12 +267,15 @@ export default function ProductForm() {
     }));
   };
 
-  const extraDistributed = Object.values(extraDistribution).reduce(
+  const extraDistributed = Object.values(
+    extraDistribution
+  ).reduce(
     (sum, value) => sum + Number(value || 0),
     0
   );
 
-  const remainingExtra = extraQuantity - extraDistributed;
+  const remainingExtra =
+    extraQuantity - extraDistributed;
 
   const confirmDistribution = () => {
     if (remainingExtra !== 0) return;
@@ -286,7 +289,9 @@ export default function ProductForm() {
         Number(extraDistribution[size] || 0);
     });
 
-    const finalTotal = Object.values(finalStock).reduce(
+    const finalTotal = Object.values(
+      finalStock
+    ).reduce(
       (sum, value) => sum + Number(value || 0),
       0
     );
@@ -311,13 +316,14 @@ export default function ProductForm() {
     e.preventDefault();
     setError("");
 
+    if (uploading) {
+      setError("Please wait for images to finish uploading.");
+      return;
+    }
+
     const quantity = Number(form.quantity) || 0;
     const sizes = PRESETS[form.size_preset] || [];
 
-    /*
-     * Don't allow saving while extra pieces are still
-     * waiting to be distributed.
-     */
     if (extraQuantity > 0 && distributionOpen) {
       setError(
         `Please distribute all ${extraQuantity} extra piece${
@@ -565,28 +571,80 @@ export default function ProductForm() {
             Images
           </div>
 
-          <label className="block border border-dashed border-white/15 rounded-2xl p-6 text-center cursor-pointer hover:bg-white/5 transition">
-            <ImageIcon className="w-5 h-5 mx-auto text-white/40 mb-2" />
+          {/* Hidden gallery picker */}
+          <input
+            ref={galleryInputRef}
+            data-testid="product-images-gallery"
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) =>
+              onPickImages(e.target.files)
+            }
+          />
 
-            <div className="text-sm text-white/70">
-              Click to upload images (no limit)
-            </div>
+          {/* Hidden camera picker */}
+          <input
+            ref={cameraInputRef}
+            data-testid="product-images-camera"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) =>
+              onPickImages(e.target.files)
+            }
+          />
 
-            <div className="text-[10px] text-white/40 mt-1">
-              All image formats supported
-            </div>
-
-            <input
-              data-testid="product-images"
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) =>
-                onPickImages(e.target.files)
+          <div className="grid grid-cols-2 gap-3">
+            {/* Gallery */}
+            <button
+              type="button"
+              onClick={() =>
+                galleryInputRef.current?.click()
               }
-            />
-          </label>
+              disabled={uploading}
+              className="min-h-[120px] border border-dashed border-white/15 rounded-2xl p-5 text-center cursor-pointer hover:bg-white/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ImageIcon className="w-6 h-6 mx-auto text-white/40 mb-2" />
+
+              <div className="text-sm text-white/70">
+                Gallery
+              </div>
+
+              <div className="text-[10px] text-white/40 mt-1">
+                Select multiple images
+              </div>
+            </button>
+
+            {/* Camera */}
+            <button
+              type="button"
+              onClick={() =>
+                cameraInputRef.current?.click()
+              }
+              disabled={uploading}
+              className="min-h-[120px] border border-dashed border-white/15 rounded-2xl p-5 text-center cursor-pointer hover:bg-white/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Camera className="w-6 h-6 mx-auto text-white/40 mb-2" />
+
+              <div className="text-sm text-white/70">
+                Camera
+              </div>
+
+              <div className="text-[10px] text-white/40 mt-1">
+                Take a product photo
+              </div>
+            </button>
+          </div>
+
+          {uploading && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-white/50">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Uploading image…
+            </div>
+          )}
 
           {form.images.length > 0 && (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 mt-3">
@@ -599,6 +657,8 @@ export default function ProductForm() {
                     src={src}
                     alt=""
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
 
                   <button
@@ -654,6 +714,7 @@ export default function ProductForm() {
             data-testid="product-submit"
             disabled={
               busy ||
+              uploading ||
               (extraQuantity > 0 &&
                 distributionOpen)
             }
