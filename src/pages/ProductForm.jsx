@@ -56,10 +56,6 @@ export default function ProductForm() {
     }));
   };
 
-  // ---------------------------------------------------------
-  // IMAGE UPLOAD
-  // ---------------------------------------------------------
-
   const onPickImages = async (files) => {
     const fileList = Array.from(files || []);
 
@@ -74,110 +70,68 @@ export default function ProductForm() {
       for (const originalFile of fileList) {
         let file = originalFile;
 
-        /*
-         * Camera/browser files can sometimes arrive with:
-         * - empty filename
-         * - no extension
-         * - generic filename
-         *
-         * Backend checks the extension, so give such files
-         * a valid extension based on MIME type.
-         */
-        const mime = file.type || "";
+        // Mobile camera/browser files can occasionally have no usable
+        // filename/extension. Give only those files a safe extension.
+        const name = file.name || "";
+        const type = file.type || "";
 
         if (
-          !file.name ||
-          !/\.(jpg|jpeg|png|webp|gif|bmp|tif|tiff|heic|heif|avif)$/i.test(
-            file.name
-          )
+          !name ||
+          !/\.(png|jpg|jpeg|webp|gif|bmp|tif|tiff|heic|heif|avif)$/i.test(name)
         ) {
-          let extension = ".jpg";
+          let ext = ".jpg";
 
-          if (mime === "image/png") {
-            extension = ".png";
-          } else if (mime === "image/webp") {
-            extension = ".webp";
-          } else if (mime === "image/gif") {
-            extension = ".gif";
-          } else if (mime === "image/heic") {
-            extension = ".heic";
-          } else if (mime === "image/heif") {
-            extension = ".heif";
-          } else if (mime === "image/avif") {
-            extension = ".avif";
-          }
+          if (type === "image/png") ext = ".png";
+          else if (type === "image/webp") ext = ".webp";
+          else if (type === "image/gif") ext = ".gif";
+          else if (type === "image/heic") ext = ".heic";
+          else if (type === "image/heif") ext = ".heif";
+          else if (type === "image/avif") ext = ".avif";
 
           file = new File(
             [file],
-            `product-image-${Date.now()}${extension}`,
-            {
-              type: mime || "image/jpeg",
-            }
+            `product-camera-${Date.now()}${ext}`,
+            { type: type || "image/jpeg" }
           );
         }
 
         const body = new FormData();
+        body.append("file", file, file.name);
 
-        body.append("file", file);
-
-        /*
-         * IMPORTANT:
-         * Do NOT manually set Content-Type here.
-         * Axios/browser automatically adds multipart boundary.
-         */
+        // Do not manually set Content-Type; Axios adds the multipart
+        // boundary automatically.
         const response = await api.post("/uploads", body);
-
         const data = response?.data;
 
-        if (!data || typeof data !== "object") {
-          throw new Error(
-            "Invalid response received from image server."
-          );
-        }
-
-        if (!data.url || typeof data.url !== "string") {
+        if (!data?.url) {
           throw new Error(
             "Image uploaded but server did not return an image URL."
           );
         }
 
-        /*
-         * Backend returns:
-         *
-         * /api/uploads/xxxxx.webp
-         *
-         * api.defaults.baseURL is something like:
-         *
-         * https://your-backend-domain.com/api
-         *
-         * Using new URL() with the backend base ensures the
-         * preview points to the backend, even if frontend and
-         * backend are on different origins.
-         */
-        let imageUrl;
+        let imageUrl = data.url;
 
-        try {
-          imageUrl = new URL(
-            data.url,
-            api.defaults.baseURL
-          ).toString();
-        } catch {
-          imageUrl = data.url;
+        if (!/^https?:\/\//i.test(imageUrl)) {
+          const base = api.defaults.baseURL || "";
+
+          if (/^https?:\/\//i.test(base)) {
+            const backendOrigin = base.replace(/\/api\/?$/, "");
+            imageUrl = new URL(imageUrl, `${backendOrigin}/`).toString();
+          } else {
+            imageUrl = new URL(
+              imageUrl,
+              window.location.origin
+            ).toString();
+          }
         }
 
         uploaded.push(imageUrl);
       }
 
-      /*
-       * Only update React state after all selected images
-       * have uploaded successfully.
-       */
-      if (uploaded.length > 0) {
-        setForm((f) => ({
-          ...f,
-          images: [...f.images, ...uploaded],
-        }));
-      }
+      setForm((f) => ({
+        ...f,
+        images: [...f.images, ...uploaded],
+      }));
     } catch (err) {
       console.error("IMAGE UPLOAD ERROR:", err);
 
@@ -202,10 +156,6 @@ export default function ProductForm() {
       }
     }
   };
-
-  // ---------------------------------------------------------
-  // SIZE DISTRIBUTION
-  // ---------------------------------------------------------
 
   const calculateDistribution = (quantityValue) => {
     const quantity = Number(quantityValue) || 0;
@@ -401,10 +351,6 @@ export default function ProductForm() {
     setError("");
   };
 
-  // ---------------------------------------------------------
-  // SUBMIT
-  // ---------------------------------------------------------
-
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -482,10 +428,6 @@ export default function ProductForm() {
   };
 
   const sizes = PRESETS[form.size_preset] || [];
-
-  // ---------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -755,6 +697,12 @@ export default function ProductForm() {
                     className="w-full h-full object-cover"
                     loading="lazy"
                     decoding="async"
+                    onError={() => {
+                      console.error(
+                        "IMAGE PREVIEW FAILED:",
+                        src
+                      );
+                    }}
                   />
 
                   <button
