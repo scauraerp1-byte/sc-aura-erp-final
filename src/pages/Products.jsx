@@ -380,6 +380,8 @@ function ProductTile({
             src={p.images[0]}
             alt={p.title}
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="w-full h-full grid place-items-center text-white/40">
