@@ -59,15 +59,30 @@ export default function ProductForm() {
   const onPickImages = async (files) => {
     const fileList = Array.from(files || []);
 
-    if (!fileList.length) return;
+    if (!fileList.length) {
+      setError("DEBUG: File select hui but browser ne file nahi di.");
+      return;
+    }
+
+    const firstFile = fileList[0];
 
     setUploading(true);
-    setError("");
+    setError(
+      `DEBUG: File selected → ${firstFile.name} | ${
+        firstFile.type || "no MIME"
+      } | ${(firstFile.size / 1024 / 1024).toFixed(2)} MB`
+    );
 
     const uploaded = [];
 
     try {
       for (const file of fileList) {
+        setError(
+          `DEBUG: Uploading → ${file.name} | ${
+            file.type || "no MIME"
+          } | ${(file.size / 1024 / 1024).toFixed(2)} MB`
+        );
+
         const body = new FormData();
         body.append("file", file);
 
@@ -77,10 +92,21 @@ export default function ProductForm() {
           },
         });
 
+        if (!data?.url) {
+          throw new Error(
+            "DEBUG: Backend response mein image URL nahi mila."
+          );
+        }
+
+        setError(
+          `DEBUG: Upload success → ${data.url}`
+        );
+
         /*
-         * IMPORTANT:
-         * Backend already returns /api/uploads/filename.webp
-         * Do NOT remove /api from the returned URL.
+         * Backend returns:
+         * /api/uploads/filename.webp
+         *
+         * Keep the /api path intact.
          */
         uploaded.push(`${API_BASE}${data.url}`);
       }
@@ -89,11 +115,19 @@ export default function ProductForm() {
         ...f,
         images: [...f.images, ...uploaded],
       }));
+
+      setError(
+        `DEBUG: ${uploaded.length} image${
+          uploaded.length === 1 ? "" : "s"
+        } successfully uploaded.`
+      );
     } catch (err) {
+      console.error("IMAGE UPLOAD ERROR:", err);
+
       setError(
         formatApiError(err.response?.data?.detail) ||
           err.message ||
-          "Unable to upload image."
+          "Something went wrong while uploading image."
       );
     } finally {
       setUploading(false);
@@ -561,7 +595,6 @@ export default function ProductForm() {
             Images
           </div>
 
-          {/* Gallery picker */}
           <input
             ref={galleryInputRef}
             data-testid="product-images-gallery"
@@ -569,12 +602,20 @@ export default function ProductForm() {
             accept="image/*"
             multiple
             className="hidden"
-            onChange={(e) =>
-              onPickImages(e.target.files)
-            }
+            onChange={(e) => {
+              const files = e.target.files;
+
+              if (!files || files.length === 0) {
+                setError(
+                  "DEBUG: Gallery ne koi file return nahi ki."
+                );
+                return;
+              }
+
+              onPickImages(files);
+            }}
           />
 
-          {/* Camera picker */}
           <input
             ref={cameraInputRef}
             data-testid="product-images-camera"
@@ -582,9 +623,18 @@ export default function ProductForm() {
             accept="image/*"
             capture="environment"
             className="hidden"
-            onChange={(e) =>
-              onPickImages(e.target.files)
-            }
+            onChange={(e) => {
+              const files = e.target.files;
+
+              if (!files || files.length === 0) {
+                setError(
+                  "DEBUG: Camera ne koi file return nahi ki."
+                );
+                return;
+              }
+
+              onPickImages(files);
+            }}
           />
 
           <div className="grid grid-cols-2 gap-3">
@@ -651,9 +701,7 @@ export default function ProductForm() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      removeImage(i)
-                    }
+                    onClick={() => removeImage(i)}
                     className="absolute top-1 right-1 w-6 h-6 grid place-items-center rounded-full bg-black/70 text-white/80 hover:text-white"
                   >
                     <X className="w-3 h-3" />
@@ -684,7 +732,7 @@ export default function ProductForm() {
         </GlassCard>
 
         {error && (
-          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm break-words">
             {error}
           </div>
         )}
@@ -766,8 +814,7 @@ export default function ProductForm() {
                       }
                       disabled={
                         Number(
-                          extraDistribution[size] ||
-                            0
+                          extraDistribution[size] || 0
                         ) <= 0
                       }
                       className="w-9 h-9 rounded-full border border-white/10 bg-white/5 grid place-items-center text-white/70 hover:bg-white/10 disabled:opacity-30"
@@ -776,8 +823,7 @@ export default function ProductForm() {
                     </button>
 
                     <div className="w-10 text-center text-white font-semibold">
-                      {extraDistribution[size] ||
-                        0}
+                      {extraDistribution[size] || 0}
                     </div>
 
                     <button
