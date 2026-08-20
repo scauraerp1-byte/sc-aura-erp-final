@@ -56,11 +56,6 @@ export default function ProductForm() {
     }));
   };
 
-  /*
-   * Upload selected/captured images.
-   * Gallery can send multiple files.
-   * Camera normally sends one file.
-   */
   const onPickImages = async (files) => {
     const fileList = Array.from(files || []);
 
@@ -82,9 +77,12 @@ export default function ProductForm() {
           },
         });
 
-        uploaded.push(
-          `${API_BASE}${data.url.replace("/api", "")}`
-        );
+        /*
+         * IMPORTANT:
+         * Backend already returns /api/uploads/filename.webp
+         * Do NOT remove /api from the returned URL.
+         */
+        uploaded.push(`${API_BASE}${data.url}`);
       }
 
       setForm((f) => ({
@@ -100,10 +98,6 @@ export default function ProductForm() {
     } finally {
       setUploading(false);
 
-      /*
-       * Reset both inputs so the user can select/capture
-       * the same image again if required.
-       */
       if (galleryInputRef.current) {
         galleryInputRef.current.value = "";
       }
@@ -114,10 +108,6 @@ export default function ProductForm() {
     }
   };
 
-  /*
-   * Calculate the size distribution only when the user
-   * finishes entering quantity and leaves the field.
-   */
   const calculateDistribution = (quantityValue) => {
     const quantity = Number(quantityValue) || 0;
     const sizes = PRESETS[form.size_preset] || [];
@@ -571,7 +561,7 @@ export default function ProductForm() {
             Images
           </div>
 
-          {/* Hidden gallery picker */}
+          {/* Gallery picker */}
           <input
             ref={galleryInputRef}
             data-testid="product-images-gallery"
@@ -584,7 +574,7 @@ export default function ProductForm() {
             }
           />
 
-          {/* Hidden camera picker */}
+          {/* Camera picker */}
           <input
             ref={cameraInputRef}
             data-testid="product-images-camera"
@@ -598,7 +588,6 @@ export default function ProductForm() {
           />
 
           <div className="grid grid-cols-2 gap-3">
-            {/* Gallery */}
             <button
               type="button"
               onClick={() =>
@@ -618,7 +607,6 @@ export default function ProductForm() {
               </div>
             </button>
 
-            {/* Camera */}
             <button
               type="button"
               onClick={() =>
@@ -729,7 +717,6 @@ export default function ProductForm() {
         </div>
       </form>
 
-      {/* Extra quantity distribution modal */}
       {distributionOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#11151d] shadow-2xl overflow-hidden">
