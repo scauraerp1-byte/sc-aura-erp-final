@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { API_BASE, formatApiError } from "../lib/api";
+import api, { formatApiError } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
 import {
@@ -56,14 +56,6 @@ export default function ProductForm() {
     }));
   };
 
-  /*
-   * IMAGE UPLOAD
-   *
-   * Important:
-   * Do NOT manually set Content-Type for FormData.
-   * Browser/Axios will automatically add:
-   * multipart/form-data; boundary=...
-   */
   const onPickImages = async (files) => {
     const fileList = Array.from(files || []);
 
@@ -96,14 +88,14 @@ export default function ProductForm() {
         }
 
         /*
-         * Backend already returns:
+         * Backend returns:
          * /api/uploads/filename.webp
          *
-         * Keep /api exactly as returned.
+         * Convert it into the actual current ERP URL.
          */
         const imageUrl = data.url.startsWith("http")
           ? data.url
-          : `${API_BASE}${data.url}`;
+          : `${window.location.origin}${data.url}`;
 
         uploaded.push(imageUrl);
       }
@@ -396,7 +388,8 @@ export default function ProductForm() {
     } catch (err) {
       setError(
         formatApiError(err.response?.data?.detail) ||
-          err.message
+          err.message ||
+          "Something went wrong. Please try again."
       );
     } finally {
       setBusy(false);
@@ -589,7 +582,6 @@ export default function ProductForm() {
             Images
           </div>
 
-          {/* Gallery picker */}
           <input
             ref={galleryInputRef}
             data-testid="product-images-gallery"
@@ -602,7 +594,6 @@ export default function ProductForm() {
             }
           />
 
-          {/* Camera picker */}
           <input
             ref={cameraInputRef}
             data-testid="product-images-camera"
@@ -675,6 +666,12 @@ export default function ProductForm() {
                     className="w-full h-full object-cover"
                     loading="lazy"
                     decoding="async"
+                    onError={() => {
+                      console.error(
+                        "IMAGE PREVIEW FAILED:",
+                        src
+                      );
+                    }}
                   />
 
                   <button
