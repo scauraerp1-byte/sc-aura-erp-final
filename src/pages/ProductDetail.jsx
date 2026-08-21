@@ -317,7 +317,7 @@ export default function ProductDetail() {
 
             {/* VENDOR */}
             {(user.role === "admin" ||
-              user.role === "manager") &&
+              (user.role === "manager" || user.role === "super_staff") &&
               (p.factory_name ||
                 p.vendor_name) && (
                 <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 min-w-0 overflow-hidden">
