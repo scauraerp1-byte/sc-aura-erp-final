@@ -71,47 +71,27 @@ export default function ProductDetail() {
     if (!p?.sr_number) return;
 
     /*
-     * Thermer / Bluetooth Print integration.
+     * Thermer Browser Print integration.
      *
-     * Thermer is configured as:
-     * - ESC/POS
-     * - 3-inch paper
+     * Thermer expects:
+     *   my.bluetoothprint.scheme://<RESPONSE_URL>
      *
-     * The Android integration accepts plain text through ACTION_SEND.
-     * Its native QR command is:
-     *   <QR>A#S#Value
-     *
-     * A = alignment (1 = center)
-     * S = QR size
-     * Value = the value encoded in the QR.
-     *
-     * Our QR contract is to encode ONLY the SCA product ID.
+     * It then requests the response URL and expects JSON containing
+     * the ESC/POS print entries. Our backend endpoint returns the QR
+     * JSON for this product.
      */
     const sr = String(p.sr_number).trim().toUpperCase();
 
-    const printData =
-      `<QR>1#40#${sr}` +
-      `<110>SC AURA KURTIS` +
-      `<110>${sr}` +
-      `<100>${String(p.title || "").trim()}`;
+    const responseUrl =
+      `https://erp.scaurakurtis.com/api/products/print-qr/${encodeURIComponent(sr)}`;
 
-    /*
-     * Android Chrome can launch an installed package through an
-     * intent:// URI. The EXTRA_TEXT value is URL encoded so the
-     * <QR> command and its # separator reach Thermer intact.
-     */
-    const intentUrl =
-      `intent://send#Intent;` +
-      `action=android.intent.action.SEND;` +
-      `type=text/plain;` +
-      `S.android.intent.extra.TEXT=${encodeURIComponent(printData)};` +
-      `package=mate.bluetoothprint;` +
-      `end`;
+    const thermerUrl =
+      `my.bluetoothprint.scheme://${responseUrl}`;
 
     try {
-      window.location.href = intentUrl;
+      window.location.href = thermerUrl;
     } catch (error) {
-      console.error("Thermer print intent failed:", error);
+      console.error("Thermer Browser Print failed:", error);
       alert("Unable to open the thermal printer app.");
     }
   };
