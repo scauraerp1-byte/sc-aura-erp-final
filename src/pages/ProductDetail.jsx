@@ -97,8 +97,9 @@ export default function ProductDetail() {
 
           <style>
             @page {
-              size: auto;
-              margin: 8mm;
+              /* 3-inch thermal label: 76.2mm wide x 63.5mm high (2.5in) */
+              size: 76.2mm 63.5mm;
+              margin: 0;
             }
 
             * {
@@ -115,53 +116,78 @@ export default function ProductDetail() {
             }
 
             body {
-              min-height: 100vh;
+              width: 76.2mm;
+              height: 63.5mm;
+              min-height: 63.5mm;
               display: flex;
               align-items: center;
               justify-content: center;
+              overflow: hidden;
             }
 
             .label {
-              width: 55mm;
-              padding: 5mm;
+              width: 76.2mm;
+              height: 63.5mm;
+              padding: 4mm;
+              box-sizing: border-box;
               text-align: center;
               background: #fff;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
             }
 
             .brand {
               font-size: 10px;
               font-weight: 700;
               letter-spacing: 2px;
-              margin-bottom: 3mm;
+              margin-bottom: 2.5mm;
             }
 
             .qr {
-              width: 42mm;
-              height: 42mm;
+              width: 46mm;
+              height: 46mm;
               object-fit: contain;
               display: block;
               margin: 0 auto;
+              flex: 0 0 auto;
             }
 
             .sr {
               font-size: 13px;
               font-weight: 700;
               letter-spacing: 1.5px;
-              margin-top: 3mm;
+              margin-top: 2mm;
+              line-height: 1.1;
             }
 
             .title {
-              font-size: 9px;
-              margin-top: 1.5mm;
+              font-size: 8px;
+              margin-top: 1mm;
               color: #555;
-              line-height: 1.3;
+              line-height: 1.2;
               max-width: 100%;
+              white-space: nowrap;
+              text-overflow: ellipsis;
               overflow: hidden;
             }
 
             @media print {
+              html,
               body {
-                min-height: auto;
+                width: 76.2mm;
+                height: 63.5mm;
+                min-height: 63.5mm;
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+              }
+
+              .label {
+                width: 76.2mm;
+                height: 63.5mm;
               }
             }
           </style>
