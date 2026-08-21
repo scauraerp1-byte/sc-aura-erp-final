@@ -67,63 +67,35 @@ export default function ProductForm() {
     const uploaded = [];
 
     try {
-      for (const originalFile of fileList) {
-        let file = originalFile;
-
-        // Mobile camera/browser files can occasionally have no usable
-        // filename/extension. Give only those files a safe extension.
-        const name = file.name || "";
-        const type = file.type || "";
-
-        if (
-          !name ||
-          !/\.(png|jpg|jpeg|webp|gif|bmp|tif|tiff|heic|heif|avif)$/i.test(name)
-        ) {
-          let ext = ".jpg";
-
-          if (type === "image/png") ext = ".png";
-          else if (type === "image/webp") ext = ".webp";
-          else if (type === "image/gif") ext = ".gif";
-          else if (type === "image/heic") ext = ".heic";
-          else if (type === "image/heif") ext = ".heif";
-          else if (type === "image/avif") ext = ".avif";
-
-          file = new File(
-            [file],
-            `product-camera-${Date.now()}${ext}`,
-            { type: type || "image/jpeg" }
-          );
-        }
-
+      for (const file of fileList) {
         const body = new FormData();
-        body.append("file", file, file.name);
 
-        // Do not manually set Content-Type; Axios adds the multipart
-        // boundary automatically.
-        const response = await api.post("/uploads", body);
-        const data = response?.data;
+        body.append(
+          "file",
+          file,
+          file.name || "product-image"
+        );
+
+        const { data } = await api.post(
+          "/uploads",
+          body
+        );
 
         if (!data?.url) {
           throw new Error(
-            "Image uploaded but server did not return an image URL."
+            "Image upload failed. Server did not return an image URL."
           );
         }
 
-        let imageUrl = data.url;
-
-        if (!/^https?:\/\//i.test(imageUrl)) {
-          const base = api.defaults.baseURL || "";
-
-          if (/^https?:\/\//i.test(base)) {
-            const backendOrigin = base.replace(/\/api\/?$/, "");
-            imageUrl = new URL(imageUrl, `${backendOrigin}/`).toString();
-          } else {
-            imageUrl = new URL(
-              imageUrl,
-              window.location.origin
-            ).toString();
-          }
-        }
+        /*
+         * Backend returns:
+         * /api/uploads/filename.webp
+         *
+         * Convert it into the actual current ERP URL.
+         */
+        const imageUrl = data.url.startsWith("http")
+          ? data.url
+          : `https://erp.scaurakurtis.com${data.url}`;
 
         uploaded.push(imageUrl);
       }
@@ -135,13 +107,10 @@ export default function ProductForm() {
     } catch (err) {
       console.error("IMAGE UPLOAD ERROR:", err);
 
-      const detail =
-        err?.response?.data?.detail ??
-        err?.response?.data?.message ??
-        err?.message;
-
       setError(
-        formatApiError(detail) ||
+        formatApiError(err.response?.data?.detail) ||
+          err.response?.data?.message ||
+          err.message ||
           "Something went wrong while uploading image."
       );
     } finally {
