@@ -68,166 +68,52 @@ export default function ProductDetail() {
    * It is for printing one product QR at a time.
    */
   const openPrint = () => {
-    if (!qrDataUrl || !p) return;
+    if (!p?.sr_number) return;
 
-    const win = window.open(
-      "",
-      "_blank",
-      "width=500,height=700"
-    );
+    /*
+     * Thermer / Bluetooth Print integration.
+     *
+     * Thermer is configured as:
+     * - ESC/POS
+     * - 3-inch paper
+     *
+     * The Android integration accepts plain text through ACTION_SEND.
+     * Its native QR command is:
+     *   <QR>A#S#Value
+     *
+     * A = alignment (1 = center)
+     * S = QR size
+     * Value = the value encoded in the QR.
+     *
+     * Our QR contract is to encode ONLY the SCA product ID.
+     */
+    const sr = String(p.sr_number).trim().toUpperCase();
 
-    if (!win) {
-      alert("Please allow pop-ups to print the QR label.");
-      return;
+    const printData =
+      `<QR>1#40#${sr}` +
+      `<110>SC AURA KURTIS` +
+      `<110>${sr}` +
+      `<100>${String(p.title || "").trim()}`;
+
+    /*
+     * Android Chrome can launch an installed package through an
+     * intent:// URI. The EXTRA_TEXT value is URL encoded so the
+     * <QR> command and its # separator reach Thermer intact.
+     */
+    const intentUrl =
+      `intent://send#Intent;` +
+      `action=android.intent.action.SEND;` +
+      `type=text/plain;` +
+      `S.android.intent.extra.TEXT=${encodeURIComponent(printData)};` +
+      `package=mate.bluetoothprint;` +
+      `end`;
+
+    try {
+      window.location.href = intentUrl;
+    } catch (error) {
+      console.error("Thermer print intent failed:", error);
+      alert("Unable to open the thermal printer app.");
     }
-
-    const safeTitle = String(
-      p.title || ""
-    ).replace(/[<>&"]/g, "");
-
-    const safeSr = String(
-      p.sr_number || ""
-    ).replace(/[<>&"]/g, "");
-
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${safeSr} - SC Aura Kurtis</title>
-
-          <style>
-            @page {
-              /* 3-inch thermal label: 76.2mm wide x 63.5mm high (2.5in) */
-              size: 76.2mm 63.5mm;
-              margin: 0;
-            }
-
-            * {
-              box-sizing: border-box;
-            }
-
-            html,
-            body {
-              margin: 0;
-              padding: 0;
-              background: #fff;
-              color: #111;
-              font-family: Arial, sans-serif;
-            }
-
-            body {
-              width: 76.2mm;
-              height: 63.5mm;
-              min-height: 63.5mm;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              overflow: hidden;
-            }
-
-            .label {
-              width: 76.2mm;
-              height: 63.5mm;
-              padding: 4mm;
-              box-sizing: border-box;
-              text-align: center;
-              background: #fff;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              overflow: hidden;
-            }
-
-            .brand {
-              font-size: 10px;
-              font-weight: 700;
-              letter-spacing: 2px;
-              margin-bottom: 2.5mm;
-            }
-
-            .qr {
-              width: 46mm;
-              height: 46mm;
-              object-fit: contain;
-              display: block;
-              margin: 0 auto;
-              flex: 0 0 auto;
-            }
-
-            .sr {
-              font-size: 13px;
-              font-weight: 700;
-              letter-spacing: 1.5px;
-              margin-top: 2mm;
-              line-height: 1.1;
-            }
-
-            .title {
-              font-size: 8px;
-              margin-top: 1mm;
-              color: #555;
-              line-height: 1.2;
-              max-width: 100%;
-              white-space: nowrap;
-              text-overflow: ellipsis;
-              overflow: hidden;
-            }
-
-            @media print {
-              html,
-              body {
-                width: 76.2mm;
-                height: 63.5mm;
-                min-height: 63.5mm;
-                margin: 0;
-                padding: 0;
-                overflow: hidden;
-              }
-
-              .label {
-                width: 76.2mm;
-                height: 63.5mm;
-              }
-            }
-          </style>
-        </head>
-
-        <body>
-          <div class="label">
-
-            <div class="brand">
-              SC AURA KURTIS
-            </div>
-
-            <img
-              class="qr"
-              src="${qrDataUrl}"
-              alt="QR Code"
-            />
-
-            <div class="sr">
-              ${safeSr}
-            </div>
-
-            <div class="title">
-              ${safeTitle}
-            </div>
-
-          </div>
-
-          <script>
-            window.onload = function () {
-              setTimeout(function () {
-                window.print();
-              }, 300);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-
-    win.document.close();
   };
 
   if (!p) {
