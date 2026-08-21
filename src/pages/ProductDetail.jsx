@@ -316,21 +316,18 @@ export default function ProductDetail() {
             </div>
 
             {/* VENDOR */}
-            {(user.role === "admin" ||
-              (user.role === "manager" || user.role === "super_staff") &&
-              (p.factory_name ||
-                p.vendor_name) && (
+            {["admin", "manager", "super_staff"].includes(user.role) &&
+              (p.factory_name || p.vendor_name) && (
                 <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 min-w-0 overflow-hidden">
-
+            
                   <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
                     Vendor / Factory (internal)
                   </div>
-
+            
                   <div className="text-sm mt-0.5 truncate">
-                    {p.vendor_name ||
-                      p.factory_name}
+                    {p.vendor_name || p.factory_name}
                   </div>
-
+            
                 </div>
               )}
 
