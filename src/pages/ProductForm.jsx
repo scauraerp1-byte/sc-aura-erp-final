@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { formatApiError } from "../lib/api";
+import api, { formatApiError, API_BASE } from "../lib/api";
 import { GlassCard, SectionTitle } from "../components/Primitives";
 import { SizePresetSelector, PRESETS } from "../components/SizeWidgets";
 import {
@@ -98,10 +98,38 @@ export default function ProductForm() {
         const body = new FormData();
         body.append("file", file, file.name);
 
-        // Do not manually set Content-Type; Axios adds the multipart
+        // Send the multipart upload directly to the backend API.
+        // Do not set Content-Type manually; the browser adds the multipart
         // boundary automatically.
-        const response = await api.post("/uploads", body);
-        const data = response?.data;
+        const uploadUrl = `${API_BASE}/uploads`;
+
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${
+              localStorage.getItem("aura_token") || ""
+            }`,
+          },
+          body,
+        });
+
+        if (!response.ok) {
+          let errorData = null;
+
+          try {
+            errorData = await response.json();
+          } catch {
+            // Ignore non-JSON error responses.
+          }
+
+          throw new Error(
+            errorData?.detail ||
+              errorData?.message ||
+              `Upload failed (${response.status})`
+          );
+        }
+
+        const data = await response.json();
 
         if (!data?.url) {
           throw new Error(
